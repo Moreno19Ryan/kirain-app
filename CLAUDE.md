@@ -219,6 +219,56 @@ Gaji · Freelance/Sampingan · THR/Bonus · Lainnya
 
 ---
 
+## 6.5. Prinsip Visual, Mockup & UI/UX
+
+### Filosofi Desain Utama
+**Prioritas nomor satu: kemudahan pengguna (ease of use).** Ini bukan cuma soal fitur, tapi soal *feel* — referensi desainnya adalah **kualitas polish ala Samsung One UI / Apple iOS**, bukan template generic Material Design mentah. Prinsip yang diadopsi dari filosofi desain mereka:
+- **Banyak whitespace** — jangan padat/sesak, kasih ruang napas antar elemen
+- **Tipografi jelas & hierarkis** — ukuran & bobot font yang membedakan info penting vs sekunder secara jelas sekali lihat
+- **Animasi halus, bukan norak** — transisi antar layar/state harus terasa natural, hindari animasi berlebihan yang justru bikin app terasa lambat
+- **Interaksi minim-tap** — setiap task (terutama nyatet transaksi) didesain untuk butuh tap sesedikit mungkin
+
+### Mood/Vibe Visual
+- **Playful tapi tetap terasa terpercaya** — karena ini app finance, orang butuh merasa "aman", walau tone santai. Jangan sampai playful-nya bikin app terkesan gak serius/gak bisa dipercaya buat data finansial
+- **Ekspresif dengan personality** — banyak app finance itu kaku/formal secara visual; KIRAIN menang lewat karakter, bukan sekadar fungsi
+- **Karakter "asisten yang approachable"** — bukan mascot komedi yang dominan. Kalau ada elemen visual maskot/ilustrasi, konsepnya harus selaras dengan persona "santai yang serius pas dibutuhkan" (lihat bagian 2), bukan sekadar lucu-lucuan tanpa substansi
+
+### Color Palette (arah, belum final)
+Beberapa opsi yang pernah dieksplor, dipilih salah satu atau dikombinasikan saat mockup:
+- **Kuning + Ungu** — kuning kasih kesan "alert/awas" (cocok tema "kaget kirain cukup"), ungu kasih kesan trustworthy tanpa terlalu formal
+- **Coral/Orange + Navy gelap** — orange untuk energy & warmth, navy untuk anchor "serius dikit" biar gak kesan mainan doang
+- **Pastel multi-warna per kategori** — tiap kategori pengeluaran (wajib/keinginan) punya warna beda, bikin UI lebih hidup dan gampang dibedain sekilas
+- Warna apa pun yang dipilih, **harus dites kontrasnya di dark mode** (karena dark mode masuk v1) dan harus ramah untuk user buta warna (lihat poin visual language kategori di bawah)
+
+### Visual Language Kategori (Icon & Warna)
+- Tiap kategori (Makan, Transportasi, dll) punya **icon unik + warna konsisten** — icon adalah identifier utama, warna cuma pemanis. Ini penting supaya tetap bisa dibedakan oleh user buta warna (sekitar 1 dari 12 pria)
+- Icon set harus **konsisten style-nya** — semua outline/rounded, jangan campur flat & 3D dalam satu set
+- Kategori yang belum pernah dipakai auto-collapse dari list utama (lihat bagian 4) — bagian dari prinsip "jangan bikin UI berantakan dengan hal yang gak relevan buat user tersebut"
+
+### App Icon & Splash Screen
+- App icon: simpel, warna kontras tinggi biar standout di homescreen (kebanyakan app finance pakai warna hijau/biru, jadi warna beda otomatis menonjol)
+- Splash screen: logo + nama app doang, durasi singkat, animasi masuk boleh (misal fade-in) tapi jangan berlebihan
+
+### Loading & Error States
+- Loading: **skeleton screen** (bentuk kotak-kotak placeholder yang meniru layout asli) — terasa lebih modern & responsif dibanding spinner polos
+- Error: pesan jelas + actionable (tombol retry), bahasa sesuai brand (lihat bagian 6), hindari jargon teknis/error code mentah
+
+### Tone of Voice dalam Microcopy (ringkasan, detail lengkap di bagian 6)
+- Notifikasi & pesan kontekstual mengikuti mood "kirain" — kaget-tapi-santai, bukan menghakimi
+- Contoh empty state, warning, error — lihat bagian 6 "Voice & Terminology Guide"
+
+### Navigasi
+- Bottom navigation 4 tab: **Home / Catat / Rekap / Kamu** (lihat bagian 4)
+- Tombol "Catat" (tambah transaksi) idealnya jadi elemen paling menonjol di navigasi (biasanya di tengah, sedikit lebih besar) — karena ini aksi paling sering dilakukan user
+
+### Aksesibilitas Dasar (wajib diperhatikan sejak mockup, bukan tempelan belakangan)
+- Kontras warna cukup, terutama diuji di dark mode
+- Tap target minimal 48x48dp (standar Android)
+- Ukuran font mengikuti setting sistem device (jangan hardcode kecil)
+- Skip fitur aksesibilitas advance (screen reader optimization detail) untuk v1 — cukup ikuti best practice dasar Flutter/Material Design yang sudah built-in
+
+---
+
 ## 7. Legal — Poin Terms of Service
 
 1. Deskripsi layanan — KIRAIN adalah alat bantu pencatatan pribadi, BUKAN layanan finansial berlisensi/bank/e-wallet
