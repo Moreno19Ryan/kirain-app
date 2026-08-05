@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/data/auth_repository.dart';
 import '../../features/auth/presentation/otp_verify_screen.dart';
 import '../../features/auth/presentation/sign_in_screen.dart';
+import '../../features/budget/presentation/budget_cycle_settings_screen.dart';
 import '../../features/catat/catat_screen.dart';
 import '../../features/categories/presentation/manage_categories_screen.dart';
 import '../../features/goals/presentation/manage_goals_screen.dart';
@@ -48,6 +49,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/transaksi-berulang',
         builder: (_, _) => const ManageRecurringScreen(),
+      ),
+      GoRoute(
+        path: '/siklus-budget',
+        builder: (_, _) => const BudgetCycleSettingsScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>

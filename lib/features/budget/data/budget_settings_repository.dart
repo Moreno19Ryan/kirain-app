@@ -33,4 +33,12 @@ class BudgetSettingsRepository {
     final row = await _client.from('budget_settings').select().eq('user_id', userId).single();
     return BudgetSettings.fromJson(row);
   }
+
+  Future<void> update({required int cycleStartDay, required bool rolloverEnabled}) {
+    final userId = _client.auth.currentUser!.id;
+    return _client
+        .from('budget_settings')
+        .update({'cycle_start_day': cycleStartDay, 'rollover_enabled': rolloverEnabled})
+        .eq('user_id', userId);
+  }
 }
