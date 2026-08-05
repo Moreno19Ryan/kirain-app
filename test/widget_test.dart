@@ -93,7 +93,9 @@ void main() {
 
     final summary = DashboardSummary(
       wajib: const BudgetGroupSummary(
-        items: [CategorySpend(category: category, spent: 150000)],
+        items: [
+          CategorySpend(category: category, spent: 150000, effectiveLimit: 100000, rollover: 0),
+        ],
         totalSpent: 150000,
         totalLimit: 100000,
       ),

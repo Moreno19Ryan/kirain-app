@@ -40,6 +40,12 @@ class KamuScreen extends ConsumerWidget {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.push('/transaksi-berulang'),
             ),
+            ListTile(
+              leading: const Icon(Icons.event_repeat_outlined),
+              title: const Text('Siklus Budget'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push('/siklus-budget'),
+            ),
             lockEnabledAsync.when(
               data: (enabled) => SwitchListTile(
                 secondary: const Icon(Icons.lock_outline),

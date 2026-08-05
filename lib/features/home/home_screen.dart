@@ -80,7 +80,7 @@ class _BudgetSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasLimit = summary.totalLimit > 0;
+    final hasLimit = summary.hasLimit;
     final isOver = hasLimit && summary.ratio >= 1.0;
     final zoneLabel = hasLimit ? (isOver ? 'Zona Kirain' : 'Zona Aman') : null;
     final zoneColor = isOver
@@ -125,7 +125,21 @@ class _BudgetSection extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              Text('Rp ${formatRupiah(summary.totalSpent)} dari Rp ${formatRupiah(summary.totalLimit)}'),
+              Text(
+                summary.totalLimit > 0
+                    ? 'Rp ${formatRupiah(summary.totalSpent)} dari Rp ${formatRupiah(summary.totalLimit)}'
+                    : 'Rp ${formatRupiah(summary.totalSpent)} dari Rp 0 (limit abis kepake defisit bulan lalu)',
+              ),
+              if (summary.totalRollover != 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    summary.totalRollover > 0
+                        ? 'Termasuk bawaan bulan lalu: +Rp ${formatRupiah(summary.totalRollover)}'
+                        : 'Termasuk bawaan defisit bulan lalu: -Rp ${formatRupiah(summary.totalRollover.abs())}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
               if (isOver)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
@@ -158,16 +172,29 @@ class _CategoryTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final limit = item.category.budgetLimit;
-    final over = limit != null && limit > 0 && item.spent > limit;
+    final hasLimit = limit != null && limit > 0;
+    final over = hasLimit && item.spent > item.effectiveLimit;
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
       title: Text(item.category.name),
-      subtitle: Text(
-        limit == null || limit == 0
-            ? 'Rp ${formatRupiah(item.spent)} · belum ada limit'
-            : 'Rp ${formatRupiah(item.spent)} dari Rp ${formatRupiah(limit)}',
-        style: over ? TextStyle(color: Theme.of(context).colorScheme.error) : null,
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            !hasLimit
+                ? 'Rp ${formatRupiah(item.spent)} · belum ada limit'
+                : 'Rp ${formatRupiah(item.spent)} dari Rp ${formatRupiah(item.effectiveLimit)}',
+            style: over ? TextStyle(color: Theme.of(context).colorScheme.error) : null,
+          ),
+          if (item.rollover != 0)
+            Text(
+              item.rollover > 0
+                  ? 'Bawaan bulan lalu: +Rp ${formatRupiah(item.rollover)}'
+                  : 'Bawaan defisit bulan lalu: -Rp ${formatRupiah(item.rollover.abs())}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+        ],
       ),
       trailing: const Icon(Icons.edit_outlined, size: 18),
       onTap: () => _showEditLimitDialog(context, ref, item.category),

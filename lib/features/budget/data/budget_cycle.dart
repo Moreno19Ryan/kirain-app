@@ -22,6 +22,12 @@ class BudgetCycle {
     return BudgetCycle(start: start, end: end);
   }
 
+  /// The cycle immediately before this one — used for rollover calculations.
+  BudgetCycle previous(int cycleStartDay) {
+    final previousMonth = DateTime(start.year, start.month - 1, 1);
+    return BudgetCycle(start: _clampedStart(previousMonth, cycleStartDay), end: start);
+  }
+
   static DateTime _clampedStart(DateTime monthDate, int cycleStartDay) {
     final lastDayOfMonth = DateTime(monthDate.year, monthDate.month + 1, 0).day;
     final day = cycleStartDay > lastDayOfMonth ? lastDayOfMonth : cycleStartDay;
