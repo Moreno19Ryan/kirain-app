@@ -1,34 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-void main() {
-  runApp(const KirainApp());
-}
+import 'app.dart';
+import 'core/config/env_config.dart';
 
-class KirainApp extends StatelessWidget {
-  const KirainApp({super.key});
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'KIRAIN',
-      theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true),
-      home: const _PlaceholderHome(),
-    );
-  }
-}
+  await Supabase.initialize(
+    url: EnvConfig.supabaseUrl,
+    publishableKey: EnvConfig.supabasePublishableKey,
+  );
 
-class _PlaceholderHome extends StatelessWidget {
-  const _PlaceholderHome();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text(
-          'KIRAIN',
-          style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-        ),
-      ),
-    );
-  }
+  runApp(const ProviderScope(child: KirainApp()));
 }
