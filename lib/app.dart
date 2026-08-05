@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'features/app_lock/presentation/app_lock_gate.dart';
+import 'features/onboarding/presentation/onboarding_gate.dart';
 
 class KirainApp extends ConsumerWidget {
   const KirainApp({super.key});
@@ -18,7 +19,7 @@ class KirainApp extends ConsumerWidget {
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
       routerConfig: router,
-      builder: (context, child) => AppLockGate(child: child!),
+      builder: (context, child) => OnboardingGate(child: AppLockGate(child: child!)),
     );
   }
 }
