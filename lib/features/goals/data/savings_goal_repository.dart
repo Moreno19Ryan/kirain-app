@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/utils/format.dart';
 import '../../transactions/data/transaction_repository.dart';
 import 'savings_goal.dart';
 
@@ -46,7 +47,7 @@ class SavingsGoalRepository {
       'target_amount': targetAmount,
       'is_emergency_fund': isEmergencyFund,
       'priority_order': nextOrder,
-      'target_date': targetDate == null ? null : _isoDate(targetDate),
+      'target_date': targetDate == null ? null : isoDate(targetDate),
     });
   }
 
@@ -63,7 +64,7 @@ class SavingsGoalRepository {
           'name': name,
           'target_amount': targetAmount,
           'is_emergency_fund': isEmergencyFund,
-          'target_date': targetDate == null ? null : _isoDate(targetDate),
+          'target_date': targetDate == null ? null : isoDate(targetDate),
         })
         .eq('id', goalId);
   }
@@ -103,11 +104,4 @@ class SavingsGoalRepository {
       await _client.from('savings_goals').update({'priority_order': i}).eq('id', orderedGoalIds[i]);
     }
   }
-}
-
-String _isoDate(DateTime date) {
-  final y = date.year.toString().padLeft(4, '0');
-  final m = date.month.toString().padLeft(2, '0');
-  final d = date.day.toString().padLeft(2, '0');
-  return '$y-$m-$d';
 }

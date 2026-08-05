@@ -10,6 +10,7 @@ import '../../features/categories/presentation/manage_categories_screen.dart';
 import '../../features/goals/presentation/manage_goals_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/kamu/kamu_screen.dart';
+import '../../features/recurring/presentation/manage_recurring_screen.dart';
 import '../../features/rekap/rekap_screen.dart';
 import 'go_router_refresh_stream.dart';
 
@@ -42,6 +43,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/target-nabung',
         builder: (_, _) => const ManageGoalsScreen(),
+      ),
+      GoRoute(
+        path: '/transaksi-berulang',
+        builder: (_, _) => const ManageRecurringScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>

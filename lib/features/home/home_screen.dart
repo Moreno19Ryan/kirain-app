@@ -5,13 +5,27 @@ import '../../core/utils/format.dart';
 import '../../core/widgets/skeleton_box.dart';
 import '../categories/data/category.dart';
 import '../categories/data/category_repository.dart';
+import '../recurring/presentation/recurring_due_prompt.dart';
 import 'data/dashboard_summary.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      checkAndPromptDueRecurring(context, ref);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final summaryAsync = ref.watch(dashboardSummaryProvider);
 
     return Scaffold(

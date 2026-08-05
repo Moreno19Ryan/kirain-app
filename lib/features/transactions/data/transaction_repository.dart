@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/utils/format.dart';
 import '../../categories/data/category.dart';
 
 final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
@@ -87,6 +88,7 @@ class TransactionRepository {
     required num amount,
     String? note,
     ExpenseType? expenseType,
+    DateTime? transactionDate,
   }) {
     final userId = _client.auth.currentUser!.id;
 
@@ -97,6 +99,7 @@ class TransactionRepository {
       'amount': amount,
       'note': note,
       'expense_type': expenseType?.name,
+      if (transactionDate != null) 'transaction_date': isoDate(transactionDate),
     });
   }
 
@@ -133,7 +136,7 @@ class TransactionRepository {
         .select('id')
         .eq('category_id', categoryId)
         .eq('amount', amount)
-        .eq('transaction_date', _isoDate(date))
+        .eq('transaction_date', isoDate(date))
         .limit(1);
     return rows.isNotEmpty;
   }
@@ -143,8 +146,8 @@ class TransactionRepository {
     final rows = await _client
         .from('transactions')
         .select()
-        .gte('transaction_date', _isoDate(start))
-        .lt('transaction_date', _isoDate(end));
+        .gte('transaction_date', isoDate(start))
+        .lt('transaction_date', isoDate(end));
     return rows.map(TransactionRow.fromJson).toList();
   }
 
@@ -166,8 +169,8 @@ class TransactionRepository {
         );
 
     if (categoryId != null) query = query.eq('category_id', categoryId);
-    if (startDate != null) query = query.gte('transaction_date', _isoDate(startDate));
-    if (endDate != null) query = query.lt('transaction_date', _isoDate(endDate));
+    if (startDate != null) query = query.gte('transaction_date', isoDate(startDate));
+    if (endDate != null) query = query.lt('transaction_date', isoDate(endDate));
     if (searchText != null && searchText.isNotEmpty) query = query.ilike('note', '%$searchText%');
 
     final rows = await query
@@ -177,11 +180,4 @@ class TransactionRepository {
 
     return rows.map(TransactionHistoryItem.fromJson).toList();
   }
-}
-
-String _isoDate(DateTime date) {
-  final y = date.year.toString().padLeft(4, '0');
-  final m = date.month.toString().padLeft(2, '0');
-  final d = date.day.toString().padLeft(2, '0');
-  return '$y-$m-$d';
 }
