@@ -6,11 +6,11 @@
 class EnvConfig {
   static const supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: 'https://qxjwjfcxbikbugwvexob.supabase.co',
+    defaultValue: 'https://ybijnwyxoieryvjzpfiy.supabase.co',
   );
 
   static const supabasePublishableKey = String.fromEnvironment(
     'SUPABASE_PUBLISHABLE_KEY',
-    defaultValue: 'sb_publishable_1GRO2YzfenTfXOz_1MMyjw_I1rIfWVW',
+    defaultValue: 'sb_publishable_MPE7DqUUaqS1U87_4yBFNg_12tXSkfN',
   );
 }
