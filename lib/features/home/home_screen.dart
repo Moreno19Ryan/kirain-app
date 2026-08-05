@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/widgets/skeleton_box.dart';
 import '../categories/data/category.dart';
 import '../categories/data/category_repository.dart';
 import 'data/dashboard_summary.dart';
@@ -27,8 +28,43 @@ class HomeScreen extends ConsumerWidget {
               ],
             ),
           ),
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const _HomeSkeleton(),
           error: (_, _) => const Center(child: Text('Gagal muat data. Coba lagi ya.')),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeSkeleton extends StatelessWidget {
+  const _HomeSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: const [_SectionSkeleton(), SizedBox(height: 24), _SectionSkeleton()],
+    );
+  }
+}
+
+class _SectionSkeleton extends StatelessWidget {
+  const _SectionSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            SkeletonBox(width: 120, height: 18),
+            SizedBox(height: 12),
+            SkeletonBox(height: 10),
+            SizedBox(height: 8),
+            SkeletonBox(width: 160, height: 14),
+          ],
         ),
       ),
     );
