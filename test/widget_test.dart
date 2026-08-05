@@ -98,10 +98,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          dashboardSummaryProvider.overrideWith((ref) async => summary),
-          dueRecurringTransactionsProvider.overrideWith((ref) async => []),
-        ],
+        overrides: [dashboardSummaryProvider.overrideWith((ref) async => summary)],
         child: const MaterialApp(home: HomeScreen()),
       ),
     );
