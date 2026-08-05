@@ -5,6 +5,7 @@ import '../../core/utils/format.dart';
 import '../categories/data/category.dart';
 import '../categories/data/category_repository.dart';
 import '../transactions/data/transaction_repository.dart';
+import 'data/csv_export.dart';
 
 class RekapScreen extends ConsumerStatefulWidget {
   const RekapScreen({super.key});
@@ -25,6 +26,7 @@ class _RekapScreenState extends ConsumerState<RekapScreen> {
   String _search = '';
   bool _isLoading = false;
   bool _hasMore = true;
+  bool _isExporting = false;
 
   @override
   void initState() {
@@ -81,6 +83,42 @@ class _RekapScreenState extends ConsumerState<RekapScreen> {
     }
   }
 
+  Future<void> _export() async {
+    if (_isExporting) return;
+    setState(() => _isExporting = true);
+
+    try {
+      final items = await ref
+          .read(transactionRepositoryProvider)
+          .fetchForExport(
+            categoryId: _categoryFilter?.id,
+            startDate: _dateFilter?.start,
+            endDate: _dateFilter?.end.add(const Duration(days: 1)),
+            searchText: _search,
+          );
+
+      if (!mounted) return;
+
+      if (items.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gak ada transaksi buat diekspor nih.')),
+        );
+        return;
+      }
+
+      await shareTransactionsCsv(items);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Yah, gagal bikin file ekspornya. Coba lagi ya.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
   void _applyFilters() => _loadMore(reset: true);
 
   void _resetFilters() {
@@ -99,7 +137,22 @@ class _RekapScreenState extends ConsumerState<RekapScreen> {
     final hasActiveFilter = _categoryFilter != null || _dateFilter != null || _search.isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Rekap Kirain')),
+      appBar: AppBar(
+        title: const Text('Rekap Kirain'),
+        actions: [
+          IconButton(
+            onPressed: _isExporting ? null : _export,
+            icon: _isExporting
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.ios_share_outlined),
+            tooltip: 'Ekspor CSV',
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(

@@ -41,6 +41,8 @@ dependencies:
   local_auth: ^3.0.2
   flutter_secure_storage: ^10.3.1
   crypto: ^3.0.7
+  share_plus: ^13.3.0
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:
