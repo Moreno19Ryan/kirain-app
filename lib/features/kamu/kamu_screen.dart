@@ -26,6 +26,12 @@ class KamuScreen extends ConsumerWidget {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.push('/kelola-kategori'),
             ),
+            ListTile(
+              leading: const Icon(Icons.savings_outlined),
+              title: const Text('Target Nabung'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push('/target-nabung'),
+            ),
             const Spacer(),
             Padding(
               padding: const EdgeInsets.all(16),

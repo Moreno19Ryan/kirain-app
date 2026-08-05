@@ -8,15 +8,16 @@ final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
 });
 
 class TransactionRow {
-  const TransactionRow({required this.categoryId, required this.amount, this.expenseType});
+  const TransactionRow({this.categoryId, required this.amount, this.expenseType});
 
-  final String categoryId;
+  /// Null for savings contributions (those link to a goal instead).
+  final String? categoryId;
   final num amount;
   final ExpenseType? expenseType;
 
   factory TransactionRow.fromJson(Map<String, dynamic> json) {
     return TransactionRow(
-      categoryId: json['category_id'] as String,
+      categoryId: json['category_id'] as String?,
       amount: json['amount'] as num,
       expenseType: switch (json['expense_type']) {
         'wajib' => ExpenseType.wajib,
@@ -31,8 +32,10 @@ class TransactionHistoryItem {
   const TransactionHistoryItem({
     required this.id,
     required this.amount,
-    required this.categoryId,
-    required this.categoryName,
+    this.categoryId,
+    this.categoryName,
+    this.goalId,
+    this.goalName,
     required this.transactionDate,
     this.note,
     this.expenseType,
@@ -40,20 +43,29 @@ class TransactionHistoryItem {
 
   final String id;
   final num amount;
-  final String categoryId;
-  final String categoryName;
+  final String? categoryId;
+  final String? categoryName;
+  final String? goalId;
+  final String? goalName;
   final DateTime transactionDate;
   final String? note;
   final ExpenseType? expenseType;
 
+  bool get isSavingsContribution => goalId != null;
+
+  String get displayName => categoryName ?? goalName ?? '-';
+
   factory TransactionHistoryItem.fromJson(Map<String, dynamic> json) {
     final category = json['categories'] as Map<String, dynamic>?;
+    final goal = json['savings_goals'] as Map<String, dynamic>?;
 
     return TransactionHistoryItem(
       id: json['id'] as String,
       amount: json['amount'] as num,
-      categoryId: json['category_id'] as String,
-      categoryName: category?['name'] as String? ?? '-',
+      categoryId: json['category_id'] as String?,
+      categoryName: category?['name'] as String?,
+      goalId: json['goal_id'] as String?,
+      goalName: goal?['name'] as String?,
       transactionDate: DateTime.parse(json['transaction_date'] as String),
       note: json['note'] as String?,
       expenseType: switch (json['expense_type']) {
@@ -81,9 +93,30 @@ class TransactionRepository {
     return _client.from('transactions').insert({
       'user_id': userId,
       'category_id': categoryId,
+      'goal_id': null,
       'amount': amount,
       'note': note,
       'expense_type': expenseType?.name,
+    });
+  }
+
+  /// A "Tabungan" transaction — money moving toward a savings goal. Doesn't
+  /// count toward wajib/keinginan (no category, no expense_type), but shows
+  /// up in Riwayat Transaksi so the overall financial picture stays honest.
+  Future<void> addSavingsContribution({
+    required String goalId,
+    required num amount,
+    String? note,
+  }) {
+    final userId = _client.auth.currentUser!.id;
+
+    return _client.from('transactions').insert({
+      'user_id': userId,
+      'category_id': null,
+      'goal_id': goalId,
+      'amount': amount,
+      'note': note,
+      'expense_type': null,
     });
   }
 
@@ -109,7 +142,10 @@ class TransactionRepository {
   }) async {
     var query = _client
         .from('transactions')
-        .select('id, amount, note, transaction_date, expense_type, category_id, categories(name)');
+        .select(
+          'id, amount, note, transaction_date, expense_type, category_id, goal_id, '
+          'categories(name), savings_goals(name)',
+        );
 
     if (categoryId != null) query = query.eq('category_id', categoryId);
     if (startDate != null) query = query.gte('transaction_date', _isoDate(startDate));
