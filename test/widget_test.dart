@@ -7,6 +7,7 @@ import 'package:kirain/features/auth/presentation/sign_in_screen.dart';
 import 'package:kirain/features/catat/catat_screen.dart';
 import 'package:kirain/features/categories/data/category.dart';
 import 'package:kirain/features/categories/data/category_repository.dart';
+import 'package:kirain/features/categories/presentation/manage_categories_screen.dart';
 import 'package:kirain/features/home/data/dashboard_summary.dart';
 import 'package:kirain/features/home/home_screen.dart';
 
@@ -100,5 +101,44 @@ void main() {
     expect(find.text('Progress Cukup'), findsOneWidget);
     expect(find.text('Zona Kirain'), findsOneWidget);
     expect(find.text('Keinginan'), findsOneWidget);
+  });
+
+  testWidgets('manage categories screen groups by Wajib/Keinginan/Pemasukan and confirms delete', (
+    tester,
+  ) async {
+    const categories = [
+      Category(
+        id: 'c1',
+        name: 'Makan & Minum',
+        kind: CategoryKind.expense,
+        expenseType: ExpenseType.wajib,
+      ),
+      Category(
+        id: 'c2',
+        name: 'Jajan & Nongkrong',
+        kind: CategoryKind.expense,
+        expenseType: ExpenseType.keinginan,
+      ),
+      Category(id: 'c3', name: 'Gaji', kind: CategoryKind.income),
+    ];
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [categoriesProvider.overrideWith((ref) async => categories)],
+        child: const MaterialApp(home: ManageCategoriesScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Wajib'), findsOneWidget);
+    expect(find.text('Keinginan'), findsOneWidget);
+    expect(find.text('Pemasukan'), findsOneWidget);
+    expect(find.text('Makan & Minum'), findsOneWidget);
+    expect(find.text('Gaji'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.delete_outline).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Yakin nih?'), findsOneWidget);
   });
 }
