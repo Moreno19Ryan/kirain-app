@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/widgets/skeleton_box.dart';
 import '../categories/data/category.dart';
 import '../categories/data/category_repository.dart';
 import '../transactions/data/transaction_repository.dart';
@@ -95,7 +96,7 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
               ? _SuccessState(saved: _lastSaved!, onAddAnother: _addAnother)
               : categoriesAsync.when(
                   data: _buildForm,
-                  loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () => const _CatatSkeleton(),
                   error: (_, _) =>
                       const Center(child: Text('Gagal muat kategori. Coba lagi ya.')),
                 ),
@@ -172,6 +173,25 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CatatSkeleton extends StatelessWidget {
+  const _CatatSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      children: const [
+        SkeletonBox(height: 56),
+        SizedBox(height: 16),
+        SkeletonBox(height: 56),
+        SizedBox(height: 16),
+        SkeletonBox(height: 56),
+        SizedBox(height: 24),
+        SkeletonBox(height: 48),
+      ],
     );
   }
 }

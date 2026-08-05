@@ -76,10 +76,37 @@ class _RootScaffold extends StatelessWidget {
         ),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.add_circle_outline), selectedIcon: Icon(Icons.add_circle), label: 'Catat'),
+          NavigationDestination(icon: _CatatNavIcon(selected: false), selectedIcon: _CatatNavIcon(selected: true), label: 'Catat'),
           NavigationDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: 'Rekap'),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Kamu'),
         ],
+      ),
+    );
+  }
+}
+
+/// "Catat" is the most-used action in the app, so it gets a filled circular
+/// badge to stand out from the other, plain outline nav icons — per
+/// CLAUDE.md's "tombol Catat idealnya jadi elemen paling menonjol".
+class _CatatNavIcon extends StatelessWidget {
+  const _CatatNavIcon({required this.selected});
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: selected ? scheme.primary : scheme.primaryContainer,
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        Icons.add,
+        size: 26,
+        color: selected ? scheme.onPrimary : scheme.onPrimaryContainer,
       ),
     );
   }
