@@ -8,6 +8,9 @@ import 'package:kirain/features/catat/catat_screen.dart';
 import 'package:kirain/features/categories/data/category.dart';
 import 'package:kirain/features/categories/data/category_repository.dart';
 import 'package:kirain/features/categories/presentation/manage_categories_screen.dart';
+import 'package:kirain/features/goals/data/savings_goal.dart';
+import 'package:kirain/features/goals/data/savings_goal_repository.dart';
+import 'package:kirain/features/goals/presentation/manage_goals_screen.dart';
 import 'package:kirain/features/home/data/dashboard_summary.dart';
 import 'package:kirain/features/home/home_screen.dart';
 
@@ -140,5 +143,28 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Yakin nih?'), findsOneWidget);
+  });
+
+  testWidgets('manage goals screen shows progress and an emergency fund badge', (tester) async {
+    const goal = SavingsGoal(
+      id: 'g1',
+      name: 'Dana Darurat',
+      targetAmount: 1000000,
+      currentAmount: 250000,
+      isEmergencyFund: true,
+      priorityOrder: 0,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [savingsGoalsProvider.overrideWith((ref) async => [goal])],
+        child: const MaterialApp(home: ManageGoalsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dana Darurat'), findsWidgets);
+    expect(find.text('Rp 250.000 dari Rp 1.000.000'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
   });
 }

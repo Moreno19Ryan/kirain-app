@@ -7,6 +7,7 @@ import '../../features/auth/presentation/otp_verify_screen.dart';
 import '../../features/auth/presentation/sign_in_screen.dart';
 import '../../features/catat/catat_screen.dart';
 import '../../features/categories/presentation/manage_categories_screen.dart';
+import '../../features/goals/presentation/manage_goals_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/kamu/kamu_screen.dart';
 import '../../features/rekap/rekap_screen.dart';
@@ -37,6 +38,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/kelola-kategori',
         builder: (_, _) => const ManageCategoriesScreen(),
+      ),
+      GoRoute(
+        path: '/target-nabung',
+        builder: (_, _) => const ManageGoalsScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
