@@ -34,6 +34,12 @@ class KamuScreen extends ConsumerWidget {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.push('/target-nabung'),
             ),
+            ListTile(
+              leading: const Icon(Icons.repeat_outlined),
+              title: const Text('Transaksi Berulang'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push('/transaksi-berulang'),
+            ),
             lockEnabledAsync.when(
               data: (enabled) => SwitchListTile(
                 secondary: const Icon(Icons.lock_outline),

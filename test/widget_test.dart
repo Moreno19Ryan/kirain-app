@@ -17,6 +17,9 @@ import 'package:kirain/features/goals/data/savings_goal_repository.dart';
 import 'package:kirain/features/goals/presentation/manage_goals_screen.dart';
 import 'package:kirain/features/home/data/dashboard_summary.dart';
 import 'package:kirain/features/home/home_screen.dart';
+import 'package:kirain/features/recurring/data/recurring_transaction.dart';
+import 'package:kirain/features/recurring/data/recurring_transaction_repository.dart';
+import 'package:kirain/features/recurring/presentation/manage_recurring_screen.dart';
 
 void main() {
   testWidgets('sign-in screen shows an email field and submit button', (tester) async {
@@ -170,6 +173,31 @@ void main() {
     expect(find.text('Dana Darurat'), findsWidgets);
     expect(find.text('Rp 250.000 dari Rp 1.000.000'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
+  });
+
+  testWidgets('manage recurring screen lists rules with frequency and due date', (tester) async {
+    final rule = RecurringTransaction(
+      id: 'r1',
+      categoryId: 'c1',
+      categoryName: 'Tagihan',
+      amount: 300000,
+      expenseType: ExpenseType.wajib,
+      frequency: RecurrenceFrequency.monthly,
+      nextDueDate: DateTime(2026, 9, 1),
+      isActive: true,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [recurringTransactionsProvider.overrideWith((ref) async => [rule])],
+        child: const MaterialApp(home: ManageRecurringScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tagihan'), findsOneWidget);
+    expect(find.textContaining('Tiap bulan'), findsOneWidget);
+    expect(find.textContaining('1 Sep 2026'), findsOneWidget);
   });
 
   testWidgets('lock screen unlocks on correct PIN', (tester) async {

@@ -10,6 +10,8 @@ import '../../features/categories/presentation/manage_categories_screen.dart';
 import '../../features/goals/presentation/manage_goals_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/kamu/kamu_screen.dart';
+import '../../features/recurring/presentation/manage_recurring_screen.dart';
+import '../../features/recurring/presentation/recurring_due_prompt.dart';
 import '../../features/rekap/rekap_screen.dart';
 import 'go_router_refresh_stream.dart';
 
@@ -43,6 +45,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/target-nabung',
         builder: (_, _) => const ManageGoalsScreen(),
       ),
+      GoRoute(
+        path: '/transaksi-berulang',
+        builder: (_, _) => const ManageRecurringScreen(),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             _RootScaffold(navigationShell: navigationShell),
@@ -69,13 +75,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 });
 
-class _RootScaffold extends StatelessWidget {
+/// Stateful (rather than HomeScreen) so the due-recurring check runs once
+/// per app session without coupling HomeScreen's tests to recurring-feature
+/// state — this shell wraps the whole bottom-nav, so it only ever mounts
+/// once regardless of which tab is active first.
+class _RootScaffold extends ConsumerStatefulWidget {
   const _RootScaffold({required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
   @override
+  ConsumerState<_RootScaffold> createState() => _RootScaffoldState();
+}
+
+class _RootScaffoldState extends ConsumerState<_RootScaffold> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      checkAndPromptDueRecurring(context, ref);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final navigationShell = widget.navigationShell;
+
     return Scaffold(
       body: navigationShell,
       bottomNavigationBar: NavigationBar(
