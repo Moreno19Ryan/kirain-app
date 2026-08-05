@@ -5,9 +5,10 @@ import '../data/app_lock_repository.dart';
 import 'lock_screen.dart';
 
 /// Wraps the whole app (via MaterialApp.router's `builder`). Shows a
-/// full-screen lock overlay on cold start if App Lock is enabled, and
-/// re-locks whenever the app is backgrounded — standard behavior for a
-/// finance app, not just "lock once at launch".
+/// full-screen lock overlay on cold start if App Lock is enabled. Re-locks
+/// after the app has been backgrounded for at least [_gracePeriod] — a
+/// quick switch to check a notification or copy something doesn't force a
+/// re-auth, but leaving the phone for real does.
 class AppLockGate extends ConsumerStatefulWidget {
   const AppLockGate({super.key, required this.child});
 
@@ -18,8 +19,11 @@ class AppLockGate extends ConsumerStatefulWidget {
 }
 
 class _AppLockGateState extends ConsumerState<AppLockGate> with WidgetsBindingObserver {
+  static const _gracePeriod = Duration(seconds: 30);
+
   bool _locked = false;
   bool _checked = false;
+  DateTime? _pausedAt;
 
   @override
   void initState() {
@@ -45,7 +49,16 @@ class _AppLockGateState extends ConsumerState<AppLockGate> with WidgetsBindingOb
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.paused) return;
+    if (state == AppLifecycleState.paused) {
+      _pausedAt = DateTime.now();
+      return;
+    }
+
+    if (state != AppLifecycleState.resumed) return;
+
+    final pausedAt = _pausedAt;
+    _pausedAt = null;
+    if (pausedAt == null || DateTime.now().difference(pausedAt) < _gracePeriod) return;
 
     ref.read(appLockRepositoryProvider).isEnabled().then((enabled) {
       if (enabled && mounted) setState(() => _locked = true);
