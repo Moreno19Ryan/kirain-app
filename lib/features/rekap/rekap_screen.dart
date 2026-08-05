@@ -210,10 +210,14 @@ class _RekapScreenState extends ConsumerState<RekapScreen> {
 
                       final item = _items[index];
                       return ListTile(
-                        title: Text(item.categoryName),
+                        leading: item.isSavingsContribution
+                            ? const Icon(Icons.savings_outlined)
+                            : null,
+                        title: Text(item.displayName),
                         subtitle: Text(
                           [
                             formatDate(item.transactionDate),
+                            if (item.isSavingsContribution) 'Tabungan',
                             if (item.note != null && item.note!.isNotEmpty) item.note!,
                           ].join(' · '),
                         ),

@@ -1,10 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../transactions/data/transaction_repository.dart';
 import 'savings_goal.dart';
 
 final savingsGoalRepositoryProvider = Provider<SavingsGoalRepository>((ref) {
-  return SavingsGoalRepository(Supabase.instance.client);
+  return SavingsGoalRepository(Supabase.instance.client, ref.watch(transactionRepositoryProvider));
 });
 
 final savingsGoalsProvider = FutureProvider<List<SavingsGoal>>((ref) {
@@ -12,9 +13,10 @@ final savingsGoalsProvider = FutureProvider<List<SavingsGoal>>((ref) {
 });
 
 class SavingsGoalRepository {
-  SavingsGoalRepository(this._client);
+  SavingsGoalRepository(this._client, this._transactionRepository);
 
   final SupabaseClient _client;
+  final TransactionRepository _transactionRepository;
 
   /// RLS already scopes this to the signed-in user's own goals.
   Future<List<SavingsGoal>> fetchGoals() async {
@@ -70,9 +72,22 @@ class SavingsGoalRepository {
     return _client.from('savings_goals').delete().eq('id', goalId);
   }
 
+  /// Records a "Tabungan" transaction (visible in Riwayat, excluded from
+  /// the wajib/keinginan budget math) and bumps the goal's current_amount.
+  Future<void> contribute({required String goalId, required num amount, String? note}) async {
+    await _transactionRepository.addSavingsContribution(goalId: goalId, amount: amount, note: note);
+    await _bumpAmount(goalId, amount);
+  }
+
+  /// Withdrawing is treated as an internal correction, not a tracked
+  /// financial event — no transaction record, just adjusts current_amount.
+  Future<void> withdraw(String goalId, num amount) {
+    return _bumpAmount(goalId, -amount);
+  }
+
   /// Simple read-modify-write; fine for a single-user mobile app doing one
   /// action at a time, not worth a DB-side atomic increment for V1.
-  Future<void> adjustAmount(String goalId, num delta) async {
+  Future<void> _bumpAmount(String goalId, num delta) async {
     final row = await _client
         .from('savings_goals')
         .select('current_amount')

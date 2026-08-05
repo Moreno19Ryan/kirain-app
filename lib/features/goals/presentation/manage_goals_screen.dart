@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/utils/format.dart';
 import '../data/savings_goal.dart';
@@ -127,17 +128,30 @@ Future<void> _showAdjustDialog(
   SavingsGoal goal, {
   required bool isAdd,
 }) async {
-  final controller = TextEditingController();
+  final amountController = TextEditingController();
+  final noteController = TextEditingController();
 
   final amount = await showDialog<num>(
     context: context,
     builder: (dialogContext) => AlertDialog(
       title: Text(isAdd ? 'Tambah Saldo ${goal.name}' : 'Kurangi Saldo ${goal.name}'),
-      content: TextField(
-        controller: controller,
-        keyboardType: TextInputType.number,
-        decoration: const InputDecoration(labelText: 'Jumlah (Rp)'),
-        autofocus: true,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: amountController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Jumlah (Rp)'),
+            autofocus: true,
+          ),
+          if (isAdd) ...[
+            const SizedBox(height: 12),
+            TextField(
+              controller: noteController,
+              decoration: const InputDecoration(labelText: 'Catatan (opsional)'),
+            ),
+          ],
+        ],
       ),
       actions: [
         TextButton(
@@ -145,7 +159,8 @@ Future<void> _showAdjustDialog(
           child: const Text('Batal'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(dialogContext, num.tryParse(controller.text.trim())),
+          onPressed: () =>
+              Navigator.pop(dialogContext, num.tryParse(amountController.text.trim())),
           child: const Text('Simpan'),
         ),
       ],
@@ -154,9 +169,13 @@ Future<void> _showAdjustDialog(
 
   if (amount == null || amount <= 0) return;
 
-  await ref
-      .read(savingsGoalRepositoryProvider)
-      .adjustAmount(goal.id, isAdd ? amount : -amount);
+  final repository = ref.read(savingsGoalRepositoryProvider);
+  if (isAdd) {
+    final note = noteController.text.trim();
+    await repository.contribute(goalId: goal.id, amount: amount, note: note.isEmpty ? null : note);
+  } else {
+    await repository.withdraw(goal.id, amount);
+  }
   ref.invalidate(savingsGoalsProvider);
 }
 
@@ -182,8 +201,16 @@ Future<void> _confirmDeleteGoal(BuildContext context, WidgetRef ref, SavingsGoal
 
   if (confirmed != true) return;
 
-  await ref.read(savingsGoalRepositoryProvider).deleteGoal(goal.id);
-  ref.invalidate(savingsGoalsProvider);
+  try {
+    await ref.read(savingsGoalRepositoryProvider).deleteGoal(goal.id);
+    ref.invalidate(savingsGoalsProvider);
+  } on PostgrestException catch (e) {
+    if (!context.mounted) return;
+    final message = e.code == '23503'
+        ? 'Target ini masih punya riwayat kontribusi, jadi belum bisa dihapus.'
+        : 'Yah, gagal hapus target. Coba lagi ya.';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
 }
 
 Future<void> _showGoalForm(BuildContext context, WidgetRef ref, {SavingsGoal? existing}) async {
