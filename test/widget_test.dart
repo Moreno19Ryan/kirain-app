@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:local_auth/local_auth.dart';
 
+import 'package:kirain/features/app_lock/data/app_lock_repository.dart';
+import 'package:kirain/features/app_lock/presentation/lock_screen.dart';
 import 'package:kirain/features/auth/presentation/otp_verify_screen.dart';
 import 'package:kirain/features/auth/presentation/sign_in_screen.dart';
 import 'package:kirain/features/catat/catat_screen.dart';
@@ -167,4 +171,60 @@ void main() {
     expect(find.text('Rp 250.000 dari Rp 1.000.000'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
   });
+
+  testWidgets('lock screen unlocks on correct PIN', (tester) async {
+    var unlocked = false;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appLockRepositoryProvider.overrideWithValue(_FakeAppLockRepository(verifyResult: true)),
+        ],
+        child: MaterialApp(home: LockScreen(onUnlocked: () => unlocked = true)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('KIRAIN Terkunci'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), '123456');
+    await tester.tap(find.text('Buka'));
+    await tester.pumpAndSettle();
+
+    expect(unlocked, isTrue);
+  });
+
+  testWidgets('lock screen shows an error and stays locked on wrong PIN', (tester) async {
+    var unlocked = false;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appLockRepositoryProvider.overrideWithValue(_FakeAppLockRepository(verifyResult: false)),
+        ],
+        child: MaterialApp(home: LockScreen(onUnlocked: () => unlocked = true)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), '000000');
+    await tester.tap(find.text('Buka'));
+    await tester.pumpAndSettle();
+
+    expect(unlocked, isFalse);
+    expect(find.text('PIN salah, coba lagi ya'), findsOneWidget);
+  });
+}
+
+class _FakeAppLockRepository extends AppLockRepository {
+  _FakeAppLockRepository({required this.verifyResult})
+    : super(const FlutterSecureStorage(), LocalAuthentication());
+
+  final bool verifyResult;
+
+  @override
+  Future<bool> canUseBiometrics() async => false;
+
+  @override
+  Future<bool> verifyPin(String pin) async => verifyResult;
 }
