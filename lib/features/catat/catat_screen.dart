@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/format.dart';
 import '../../core/widgets/skeleton_box.dart';
 import '../categories/data/category.dart';
 import '../categories/data/category_repository.dart';
@@ -210,7 +211,7 @@ class _SuccessState extends StatelessWidget {
         children: [
           Icon(Icons.check_circle, size: 56, color: Theme.of(context).colorScheme.primary),
           const SizedBox(height: 12),
-          Text('Tercatat! ${saved.category} · Rp ${_formatAmount(saved.amount)}'),
+          Text('Tercatat! ${saved.category} · Rp ${formatRupiah(saved.amount)}'),
           const SizedBox(height: 24),
           FilledButton(onPressed: onAddAnother, child: const Text('Tambah Lagi')),
         ],
@@ -224,14 +225,4 @@ class _SavedSummary {
 
   final String category;
   final num amount;
-}
-
-String _formatAmount(num amount) {
-  final digits = amount.toStringAsFixed(0);
-  final buffer = StringBuffer();
-  for (var i = 0; i < digits.length; i++) {
-    if (i > 0 && (digits.length - i) % 3 == 0) buffer.write('.');
-    buffer.write(digits[i]);
-  }
-  return buffer.toString();
 }

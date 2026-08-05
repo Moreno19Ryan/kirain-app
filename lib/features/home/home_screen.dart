@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/format.dart';
 import '../../core/widgets/skeleton_box.dart';
 import '../categories/data/category.dart';
 import '../categories/data/category_repository.dart';
@@ -124,7 +125,7 @@ class _BudgetSection extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              Text('Rp ${_formatAmount(summary.totalSpent)} dari Rp ${_formatAmount(summary.totalLimit)}'),
+              Text('Rp ${formatRupiah(summary.totalSpent)} dari Rp ${formatRupiah(summary.totalLimit)}'),
               if (isOver)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
@@ -164,8 +165,8 @@ class _CategoryTile extends ConsumerWidget {
       title: Text(item.category.name),
       subtitle: Text(
         limit == null || limit == 0
-            ? 'Rp ${_formatAmount(item.spent)} · belum ada limit'
-            : 'Rp ${_formatAmount(item.spent)} dari Rp ${_formatAmount(limit)}',
+            ? 'Rp ${formatRupiah(item.spent)} · belum ada limit'
+            : 'Rp ${formatRupiah(item.spent)} dari Rp ${formatRupiah(limit)}',
         style: over ? TextStyle(color: Theme.of(context).colorScheme.error) : null,
       ),
       trailing: const Icon(Icons.edit_outlined, size: 18),
@@ -210,14 +211,4 @@ Future<void> _showEditLimitDialog(BuildContext context, WidgetRef ref, Category 
   await ref.read(categoryRepositoryProvider).updateBudgetLimit(category.id, result);
   ref.invalidate(categoriesProvider);
   ref.invalidate(dashboardSummaryProvider);
-}
-
-String _formatAmount(num amount) {
-  final digits = amount.toStringAsFixed(0);
-  final buffer = StringBuffer();
-  for (var i = 0; i < digits.length; i++) {
-    if (i > 0 && (digits.length - i) % 3 == 0) buffer.write('.');
-    buffer.write(digits[i]);
-  }
-  return buffer.toString();
 }
