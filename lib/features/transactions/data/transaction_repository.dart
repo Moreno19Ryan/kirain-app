@@ -161,6 +161,42 @@ class TransactionRepository {
     DateTime? endDate,
     String? searchText,
   }) async {
+    final rows = await _filteredHistoryQuery(
+      categoryId: categoryId,
+      startDate: startDate,
+      endDate: endDate,
+      searchText: searchText,
+    ).order('transaction_date', ascending: false).order('created_at', ascending: false).range(offset, offset + limit - 1);
+
+    return rows.map(TransactionHistoryItem.fromJson).toList();
+  }
+
+  /// Unpaginated, same filters as [fetchHistory] — for CSV export, not the
+  /// scrolling list. Unlike the UI (which must lazy-load), a one-off export
+  /// fetching everything that matches is fine; a personal finance app's
+  /// history is small enough for a single round trip.
+  Future<List<TransactionHistoryItem>> fetchForExport({
+    String? categoryId,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? searchText,
+  }) async {
+    final rows = await _filteredHistoryQuery(
+      categoryId: categoryId,
+      startDate: startDate,
+      endDate: endDate,
+      searchText: searchText,
+    ).order('transaction_date', ascending: false).order('created_at', ascending: false);
+
+    return rows.map(TransactionHistoryItem.fromJson).toList();
+  }
+
+  PostgrestTransformBuilder<PostgrestList> _filteredHistoryQuery({
+    String? categoryId,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? searchText,
+  }) {
     var query = _client
         .from('transactions')
         .select(
@@ -173,11 +209,6 @@ class TransactionRepository {
     if (endDate != null) query = query.lt('transaction_date', isoDate(endDate));
     if (searchText != null && searchText.isNotEmpty) query = query.ilike('note', '%$searchText%');
 
-    final rows = await query
-        .order('transaction_date', ascending: false)
-        .order('created_at', ascending: false)
-        .range(offset, offset + limit - 1);
-
-    return rows.map(TransactionHistoryItem.fromJson).toList();
+    return query;
   }
 }
