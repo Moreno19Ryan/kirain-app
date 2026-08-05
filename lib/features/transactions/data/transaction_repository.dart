@@ -120,6 +120,24 @@ class TransactionRepository {
     });
   }
 
+  /// Soft duplicate check: same category, same amount, same day. Used to
+  /// warn (not block) before saving a new transaction — per CLAUDE.md,
+  /// duplicate detection should never stop the user from saving.
+  Future<bool> hasPossibleDuplicate({
+    required String categoryId,
+    required num amount,
+    required DateTime date,
+  }) async {
+    final rows = await _client
+        .from('transactions')
+        .select('id')
+        .eq('category_id', categoryId)
+        .eq('amount', amount)
+        .eq('transaction_date', _isoDate(date))
+        .limit(1);
+    return rows.isNotEmpty;
+  }
+
   /// [end] is exclusive.
   Future<List<TransactionRow>> fetchInRange({required DateTime start, required DateTime end}) async {
     final rows = await _client

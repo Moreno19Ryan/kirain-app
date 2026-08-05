@@ -46,15 +46,25 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
       return;
     }
 
+    final amount = num.parse(_amountController.text.trim());
+    final category = _selectedCategory!;
+
     setState(() {
       _isSaving = true;
       _errorMessage = null;
     });
 
-    final amount = num.parse(_amountController.text.trim());
-    final category = _selectedCategory!;
-
     try {
+      final isDuplicate = await ref
+          .read(transactionRepositoryProvider)
+          .hasPossibleDuplicate(categoryId: category.id, amount: amount, date: DateTime.now());
+
+      if (isDuplicate) {
+        if (!mounted) return;
+        final proceed = await _confirmDuplicate(category, amount);
+        if (proceed != true) return;
+      }
+
       await ref
           .read(transactionRepositoryProvider)
           .addTransaction(
@@ -74,6 +84,30 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  /// Soft warning per CLAUDE.md — never blocks, just double-checks.
+  Future<bool?> _confirmDuplicate(Category category, num amount) {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Transaksi mirip nih'),
+        content: Text(
+          'Kamu udah catat Rp ${formatRupiah(amount)} di kategori ${category.name} hari ini. '
+          'Mau catat lagi?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Tetap Catat'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _addAnother() {
