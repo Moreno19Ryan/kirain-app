@@ -32,6 +32,12 @@ class KamuScreen extends ConsumerWidget {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.push('/target-nabung'),
             ),
+            ListTile(
+              leading: const Icon(Icons.repeat_outlined),
+              title: const Text('Transaksi Berulang'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push('/transaksi-berulang'),
+            ),
             const Spacer(),
             Padding(
               padding: const EdgeInsets.all(16),
