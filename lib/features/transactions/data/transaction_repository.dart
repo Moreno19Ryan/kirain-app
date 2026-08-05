@@ -27,6 +27,44 @@ class TransactionRow {
   }
 }
 
+class TransactionHistoryItem {
+  const TransactionHistoryItem({
+    required this.id,
+    required this.amount,
+    required this.categoryId,
+    required this.categoryName,
+    required this.transactionDate,
+    this.note,
+    this.expenseType,
+  });
+
+  final String id;
+  final num amount;
+  final String categoryId;
+  final String categoryName;
+  final DateTime transactionDate;
+  final String? note;
+  final ExpenseType? expenseType;
+
+  factory TransactionHistoryItem.fromJson(Map<String, dynamic> json) {
+    final category = json['categories'] as Map<String, dynamic>?;
+
+    return TransactionHistoryItem(
+      id: json['id'] as String,
+      amount: json['amount'] as num,
+      categoryId: json['category_id'] as String,
+      categoryName: category?['name'] as String? ?? '-',
+      transactionDate: DateTime.parse(json['transaction_date'] as String),
+      note: json['note'] as String?,
+      expenseType: switch (json['expense_type']) {
+        'wajib' => ExpenseType.wajib,
+        'keinginan' => ExpenseType.keinginan,
+        _ => null,
+      },
+    );
+  }
+}
+
 class TransactionRepository {
   TransactionRepository(this._client);
 
@@ -57,6 +95,33 @@ class TransactionRepository {
         .gte('transaction_date', _isoDate(start))
         .lt('transaction_date', _isoDate(end));
     return rows.map(TransactionRow.fromJson).toList();
+  }
+
+  /// Paginated, most-recent-first — lazy loading per CLAUDE.md's performance
+  /// requirement (never load the whole transaction history at once).
+  Future<List<TransactionHistoryItem>> fetchHistory({
+    required int limit,
+    required int offset,
+    String? categoryId,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? searchText,
+  }) async {
+    var query = _client
+        .from('transactions')
+        .select('id, amount, note, transaction_date, expense_type, category_id, categories(name)');
+
+    if (categoryId != null) query = query.eq('category_id', categoryId);
+    if (startDate != null) query = query.gte('transaction_date', _isoDate(startDate));
+    if (endDate != null) query = query.lt('transaction_date', _isoDate(endDate));
+    if (searchText != null && searchText.isNotEmpty) query = query.ilike('note', '%$searchText%');
+
+    final rows = await query
+        .order('transaction_date', ascending: false)
+        .order('created_at', ascending: false)
+        .range(offset, offset + limit - 1);
+
+    return rows.map(TransactionHistoryItem.fromJson).toList();
   }
 }
 
