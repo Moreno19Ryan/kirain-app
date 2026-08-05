@@ -21,4 +21,8 @@ class CategoryRepository {
     final rows = await _client.from('categories').select().order('name');
     return rows.map(Category.fromJson).toList();
   }
+
+  Future<void> updateBudgetLimit(String categoryId, num? limit) {
+    return _client.from('categories').update({'budget_limit': limit}).eq('id', categoryId);
+  }
 }

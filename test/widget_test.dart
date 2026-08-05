@@ -7,6 +7,8 @@ import 'package:kirain/features/auth/presentation/sign_in_screen.dart';
 import 'package:kirain/features/catat/catat_screen.dart';
 import 'package:kirain/features/categories/data/category.dart';
 import 'package:kirain/features/categories/data/category_repository.dart';
+import 'package:kirain/features/home/data/dashboard_summary.dart';
+import 'package:kirain/features/home/home_screen.dart';
 
 void main() {
   testWidgets('sign-in screen shows an email field and submit button', (tester) async {
@@ -66,4 +68,37 @@ void main() {
       expect(find.text('Keinginan'), findsOneWidget);
     },
   );
+
+  testWidgets('home dashboard flags Zona Kirain when spending is over the limit', (
+    tester,
+  ) async {
+    const category = Category(
+      id: 'c1',
+      name: 'Makan & Minum',
+      kind: CategoryKind.expense,
+      expenseType: ExpenseType.wajib,
+      budgetLimit: 100000,
+    );
+
+    final summary = DashboardSummary(
+      wajib: const BudgetGroupSummary(
+        items: [CategorySpend(category: category, spent: 150000)],
+        totalSpent: 150000,
+        totalLimit: 100000,
+      ),
+      keinginan: const BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [dashboardSummaryProvider.overrideWith((ref) async => summary)],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Progress Cukup'), findsOneWidget);
+    expect(find.text('Zona Kirain'), findsOneWidget);
+    expect(find.text('Keinginan'), findsOneWidget);
+  });
 }
