@@ -8,6 +8,14 @@ final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
   return TransactionRepository(Supabase.instance.client);
 });
 
+/// Whether this account has ever recorded a single transaction — used to
+/// gate the retroactive-entry nudge on Home. No persisted "seen" flag
+/// needed: the moment the user adds any transaction, this naturally
+/// flips to true and the nudge stops showing on its own.
+final hasAnyTransactionsProvider = FutureProvider<bool>((ref) {
+  return ref.watch(transactionRepositoryProvider).hasAnyTransactions();
+});
+
 class TransactionRow {
   const TransactionRow({this.categoryId, required this.amount, this.expenseType});
 
@@ -121,6 +129,11 @@ class TransactionRepository {
       'note': note,
       'expense_type': null,
     });
+  }
+
+  Future<bool> hasAnyTransactions() async {
+    final rows = await _client.from('transactions').select('id').limit(1);
+    return rows.isNotEmpty;
   }
 
   /// Soft duplicate check: same category, same amount, same day. Used to

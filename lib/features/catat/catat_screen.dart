@@ -22,6 +22,7 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
 
   Category? _selectedCategory;
   ExpenseType? _expenseType;
+  DateTime _transactionDate = DateTime.now();
   bool _isSaving = false;
   String? _errorMessage;
   _SavedSummary? _lastSaved;
@@ -79,6 +80,7 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
             amount: amount,
             note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
             expenseType: category.kind == CategoryKind.expense ? _expenseType : null,
+            transactionDate: _transactionDate,
           );
 
       setState(() {
@@ -138,6 +140,20 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
         ],
       ),
     );
+  }
+
+  /// Bounded the same way as Rekap's date-range filter. Kept selected across
+  /// "Tambah Lagi" taps (not reset to today) — the point of retroactive
+  /// entry is backfilling several past transactions in a row, so forcing a
+  /// re-pick on every single one would defeat that.
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _transactionDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) setState(() => _transactionDate = picked);
   }
 
   void _addAnother() {
@@ -213,6 +229,12 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
               onSelectionChanged: (selection) => setState(() => _expenseType = selection.first),
             ),
           ],
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: _pickDate,
+            icon: const Icon(Icons.calendar_today_outlined),
+            label: Text('Tanggal: ${formatDate(_transactionDate)}'),
+          ),
           const SizedBox(height: 16),
           TextFormField(
             controller: _noteController,

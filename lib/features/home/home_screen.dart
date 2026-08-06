@@ -7,7 +7,9 @@ import '../categories/data/category.dart';
 import '../categories/data/category_repository.dart';
 import '../tips/data/tip_provider.dart';
 import '../tips/presentation/tip_card.dart';
+import '../transactions/data/transaction_repository.dart';
 import 'data/dashboard_summary.dart';
+import 'presentation/retroactive_entry_banner.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -16,6 +18,9 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final summaryAsync = ref.watch(dashboardSummaryProvider);
     final tip = ref.watch(dailyTipProvider);
+    final isNewAccount = ref
+        .watch(hasAnyTransactionsProvider)
+        .maybeWhen(data: (hasAny) => !hasAny, orElse: () => false);
 
     return Scaffold(
       appBar: AppBar(title: const Text('KIRAIN')),
@@ -26,6 +31,10 @@ class HomeScreen extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                if (isNewAccount) ...[
+                  const RetroactiveEntryBanner(),
+                  const SizedBox(height: 16),
+                ],
                 TipCard(tip: tip),
                 const SizedBox(height: 16),
                 _BudgetSection(title: 'Progress Cukup', summary: summary.wajib),
