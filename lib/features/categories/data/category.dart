@@ -9,6 +9,7 @@ class Category {
     required this.kind,
     this.expenseType,
     this.budgetLimit,
+    this.alertThresholdPct = 80,
   });
 
   final String id;
@@ -18,6 +19,10 @@ class Category {
 
   /// Null means the user hasn't set a limit for this category yet.
   final num? budgetLimit;
+
+  /// Percentage of [budgetLimit] at which the category flags "Zona Waspada"
+  /// on Home — defaults to 80 per CLAUDE.md, customizable per category.
+  final int alertThresholdPct;
 
   factory Category.fromJson(Map<String, dynamic> json) {
     return Category(
@@ -30,6 +35,7 @@ class Category {
         _ => null,
       },
       budgetLimit: json['budget_limit'] as num?,
+      alertThresholdPct: json['alert_threshold_pct'] as int? ?? 80,
     );
   }
 }
