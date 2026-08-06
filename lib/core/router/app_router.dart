@@ -7,6 +7,7 @@ import '../../features/auth/data/auth_repository.dart';
 import '../../features/auth/presentation/otp_verify_screen.dart';
 import '../../features/auth/presentation/sign_in_screen.dart';
 import '../../features/budget/presentation/budget_cycle_settings_screen.dart';
+import '../../features/budget/presentation/gajian_reminder_prompt.dart';
 import '../../features/catat/catat_screen.dart';
 import '../../features/categories/presentation/manage_categories_screen.dart';
 import '../../features/goals/presentation/manage_goals_screen.dart';
@@ -113,8 +114,13 @@ class _RootScaffoldState extends ConsumerState<_RootScaffold> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      checkAndPromptDueRecurring(context, ref);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Sequential, not parallel — both can show a dialog, and running them
+      // one after another avoids two showDialog calls racing on the same
+      // frame.
+      await checkAndPromptDueRecurring(context, ref);
+      if (!mounted) return;
+      await checkAndPromptGajianReminder(context, ref);
     });
     _setUpQuickActions();
   }
