@@ -43,8 +43,9 @@ class PrivacyPolicyScreen extends StatelessWidget {
           LegalSection(
             title: 'Kontrol kamu atas data',
             body:
-                'Mau hapus akun beserta semua datanya? Hubungi kami lewat WA '
-                'atau email di halaman Bantuan, nanti dibantu prosesnya.',
+                'Kamu bisa hapus akun beserta semua datanya kapan aja, '
+                'sendiri, dari halaman Kamu — gak perlu hubungi siapa-siapa '
+                'dulu. Sekali dihapus, gak bisa dikembalikan lagi.',
           ),
           LegalSection(
             title: 'Ada pertanyaan?',

@@ -38,8 +38,9 @@ const _faqs = [
   (
     question: 'Gimana kalau mau hapus akun?',
     answer:
-        'Untuk sekarang, hubungi kami dulu lewat WA atau email di bawah, '
-        'nanti dibantu prosesnya. Opsi hapus akun sendiri lagi disiapin.',
+        'Tinggal buka halaman Kamu, scroll ke bawah, terus pilih "Hapus '
+        'Akun". Bisa langsung dari situ, gak perlu hubungi siapa-siapa — '
+        'tapi inget, sekali dihapus gak bisa dikembalikan lagi.',
   ),
 ];
 
