@@ -10,8 +10,11 @@ import '../../features/budget/presentation/budget_cycle_settings_screen.dart';
 import '../../features/catat/catat_screen.dart';
 import '../../features/categories/presentation/manage_categories_screen.dart';
 import '../../features/goals/presentation/manage_goals_screen.dart';
+import '../../features/help/presentation/faq_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/kamu/kamu_screen.dart';
+import '../../features/legal/presentation/privacy_policy_screen.dart';
+import '../../features/legal/presentation/terms_of_service_screen.dart';
 import '../../features/recurring/presentation/manage_recurring_screen.dart';
 import '../../features/recurring/presentation/recurring_due_prompt.dart';
 import '../../features/rekap/rekap_screen.dart';
@@ -54,6 +57,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/siklus-budget',
         builder: (_, _) => const BudgetCycleSettingsScreen(),
+      ),
+      GoRoute(path: '/bantuan', builder: (_, _) => const FaqScreen()),
+      GoRoute(
+        path: '/kebijakan-privasi',
+        builder: (_, _) => const PrivacyPolicyScreen(),
+      ),
+      GoRoute(
+        path: '/syarat-ketentuan',
+        builder: (_, _) => const TermsOfServiceScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
