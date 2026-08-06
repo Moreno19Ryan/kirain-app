@@ -6,6 +6,7 @@ import '../../core/widgets/skeleton_box.dart';
 import '../categories/data/category.dart';
 import '../categories/data/category_repository.dart';
 import '../transactions/data/transaction_repository.dart';
+import 'data/riba_detector.dart';
 
 class CatatScreen extends ConsumerStatefulWidget {
   const CatatScreen({super.key});
@@ -65,6 +66,12 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
         if (proceed != true) return;
       }
 
+      final note = _noteController.text.trim();
+      if (note.isNotEmpty && looksLikeRiba(note)) {
+        if (!mounted) return;
+        await _showRibaNotice();
+      }
+
       await ref
           .read(transactionRepositoryProvider)
           .addTransaction(
@@ -104,6 +111,29 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('Tetap Catat'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Educational, not blocking — per CLAUDE.md, this only ever informs, it
+  /// never gates the save. A single acknowledgement button, then the
+  /// transaction saves right after regardless.
+  Future<void> _showRibaNotice() {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Eh, tunggu dulu'),
+        content: const Text(
+          'Eh, ini kedengeran kayak transaksi berbunga (riba) ya? Yuk coba '
+          'dipikir ulang, atau kalau emang udah jalan, yuk kita bantu '
+          'lunasin secepatnya 🙏',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Oke, Paham'),
           ),
         ],
       ),
