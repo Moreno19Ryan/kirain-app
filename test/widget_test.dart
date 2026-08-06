@@ -20,6 +20,7 @@ import 'package:kirain/features/home/home_screen.dart';
 import 'package:kirain/features/recurring/data/recurring_transaction.dart';
 import 'package:kirain/features/recurring/data/recurring_transaction_repository.dart';
 import 'package:kirain/features/recurring/presentation/manage_recurring_screen.dart';
+import 'package:kirain/features/transactions/data/transaction_repository.dart';
 
 void main() {
   testWidgets('sign-in screen shows an email field and submit button', (tester) async {
@@ -151,6 +152,50 @@ void main() {
 
     expect(find.text('Zona Waspada — udah mendekati limit nih'), findsOneWidget);
     expect(find.text('Zona Kirain'), findsNothing);
+  });
+
+  testWidgets('home dashboard shows the retroactive-entry nudge for a brand-new account', (
+    tester,
+  ) async {
+    const summary = DashboardSummary(
+      wajib: BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0),
+      keinginan: BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          dashboardSummaryProvider.overrideWith((ref) async => summary),
+          hasAnyTransactionsProvider.overrideWith((ref) async => false),
+        ],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Baru mulai nih?'), findsOneWidget);
+  });
+
+  testWidgets('home dashboard hides the retroactive-entry nudge once there is any transaction', (
+    tester,
+  ) async {
+    const summary = DashboardSummary(
+      wajib: BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0),
+      keinginan: BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          dashboardSummaryProvider.overrideWith((ref) async => summary),
+          hasAnyTransactionsProvider.overrideWith((ref) async => true),
+        ],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Baru mulai nih?'), findsNothing);
   });
 
   testWidgets('manage categories screen groups by Wajib/Keinginan/Pemasukan and confirms delete', (
