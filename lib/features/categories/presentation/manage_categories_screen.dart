@@ -140,6 +140,7 @@ Future<void> _showCategoryForm(BuildContext context, WidgetRef ref, {Category? e
   );
   var kind = existing?.kind ?? CategoryKind.expense;
   var expenseType = existing?.expenseType ?? ExpenseType.keinginan;
+  var alertThresholdPct = existing?.alertThresholdPct ?? 80;
 
   final saved = await showDialog<bool>(
     context: context,
@@ -189,6 +190,17 @@ Future<void> _showCategoryForm(BuildContext context, WidgetRef ref, {Category? e
                         labelText: 'Limit per siklus (Rp, opsional)',
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    Text('Alert Zona Waspada di $alertThresholdPct% dari limit'),
+                    Slider(
+                      value: alertThresholdPct.toDouble(),
+                      min: 50,
+                      max: 100,
+                      divisions: 10,
+                      label: '$alertThresholdPct%',
+                      onChanged: (value) =>
+                          setDialogState(() => alertThresholdPct = value.round()),
+                    ),
                   ],
                 ],
               ),
@@ -223,6 +235,7 @@ Future<void> _showCategoryForm(BuildContext context, WidgetRef ref, {Category? e
       kind: kind,
       expenseType: kind == CategoryKind.expense ? expenseType : null,
       budgetLimit: kind == CategoryKind.expense ? limit : null,
+      alertThresholdPct: alertThresholdPct,
     );
   } else {
     await repository.updateCategory(
@@ -230,6 +243,7 @@ Future<void> _showCategoryForm(BuildContext context, WidgetRef ref, {Category? e
       name: name,
       expenseType: existing.kind == CategoryKind.expense ? expenseType : null,
       budgetLimit: existing.kind == CategoryKind.expense ? limit : null,
+      alertThresholdPct: alertThresholdPct,
     );
   }
 

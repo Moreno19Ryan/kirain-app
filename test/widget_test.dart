@@ -115,6 +115,44 @@ void main() {
     expect(find.text('Keinginan'), findsOneWidget);
   });
 
+  testWidgets('home dashboard flags Zona Waspada when a category nears its alert threshold', (
+    tester,
+  ) async {
+    const category = Category(
+      id: 'c1',
+      name: 'Jajan & Nongkrong',
+      kind: CategoryKind.expense,
+      expenseType: ExpenseType.keinginan,
+      budgetLimit: 100000,
+      alertThresholdPct: 80,
+    );
+
+    final summary = DashboardSummary(
+      wajib: const BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0),
+      keinginan: const BudgetGroupSummary(
+        items: [
+          CategorySpend(category: category, spent: 85000, effectiveLimit: 100000, rollover: 0),
+        ],
+        totalSpent: 85000,
+        totalLimit: 100000,
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [dashboardSummaryProvider.overrideWith((ref) async => summary)],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Rincian per kategori'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Zona Waspada — udah mendekati limit nih'), findsOneWidget);
+    expect(find.text('Zona Kirain'), findsNothing);
+  });
+
   testWidgets('manage categories screen groups by Wajib/Keinginan/Pemasukan and confirms delete', (
     tester,
   ) async {

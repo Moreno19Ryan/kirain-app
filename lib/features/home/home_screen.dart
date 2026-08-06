@@ -179,6 +179,9 @@ class _CategoryTile extends ConsumerWidget {
     final limit = item.category.budgetLimit;
     final hasLimit = limit != null && limit > 0;
     final over = hasLimit && item.spent > item.effectiveLimit;
+    final ratio = hasLimit && item.effectiveLimit > 0 ? item.spent / item.effectiveLimit : 0.0;
+    final isWarning = !over && hasLimit && ratio >= item.category.alertThresholdPct / 100;
+    const warningColor = Colors.orange;
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
@@ -190,8 +193,17 @@ class _CategoryTile extends ConsumerWidget {
             !hasLimit
                 ? 'Rp ${formatRupiah(item.spent)} · belum ada limit'
                 : 'Rp ${formatRupiah(item.spent)} dari Rp ${formatRupiah(item.effectiveLimit)}',
-            style: over ? TextStyle(color: Theme.of(context).colorScheme.error) : null,
+            style: over
+                ? TextStyle(color: Theme.of(context).colorScheme.error)
+                : isWarning
+                ? const TextStyle(color: warningColor)
+                : null,
           ),
+          if (isWarning)
+            const Text(
+              'Zona Waspada — udah mendekati limit nih',
+              style: TextStyle(color: warningColor, fontSize: 12),
+            ),
           if (item.rollover != 0)
             Text(
               item.rollover > 0

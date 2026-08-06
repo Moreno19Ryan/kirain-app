@@ -31,6 +31,7 @@ class CategoryRepository {
     required CategoryKind kind,
     ExpenseType? expenseType,
     num? budgetLimit,
+    int alertThresholdPct = 80,
   }) {
     final userId = _client.auth.currentUser!.id;
 
@@ -40,6 +41,7 @@ class CategoryRepository {
       'kind': kind.name,
       'expense_type': expenseType?.name,
       'budget_limit': budgetLimit,
+      'alert_threshold_pct': alertThresholdPct,
     });
   }
 
@@ -48,6 +50,7 @@ class CategoryRepository {
     required String name,
     ExpenseType? expenseType,
     num? budgetLimit,
+    int alertThresholdPct = 80,
   }) {
     return _client
         .from('categories')
@@ -55,6 +58,7 @@ class CategoryRepository {
           'name': name,
           'expense_type': expenseType?.name,
           'budget_limit': budgetLimit,
+          'alert_threshold_pct': alertThresholdPct,
         })
         .eq('id', categoryId);
   }
