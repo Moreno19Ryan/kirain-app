@@ -56,6 +56,24 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_native_splash: ^2.4.8
+
+# Native splash screen config, consumed by `dart run
+# flutter_native_splash:create` (dev-time code-gen, not a runtime dep).
+# Teal matches the app's existing colorSchemeSeed (lib/core/theme/app_theme.dart)
+# rather than introducing a new brand color — CLAUDE.md still marks the
+# final palette choice as open, so this reuses what's already live
+# everywhere else in the app instead of deciding a new one here.
+flutter_native_splash:
+  color: "#009688"
+  image: assets/splash/splash_logo.png
+  color_dark: "#009688"
+  image_dark: assets/splash/splash_logo.png
+  android_12:
+    color: "#009688"
+    image: assets/splash/splash_logo.png
+    color_dark: "#009688"
+    image_dark: assets/splash/splash_logo.png
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
