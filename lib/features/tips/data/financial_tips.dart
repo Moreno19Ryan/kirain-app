@@ -1,0 +1,28 @@
+/// Manually-written per CLAUDE.md (no auto-generated content for V1) —
+/// 1 shown at random per Home visit via [dailyTipProvider].
+const financialTips = <String>[
+  'Sebelum checkout, coba diemin dulu 24 jam. Kalau besok masih pengen, baru deh beli.',
+  'Nabung itu bukan sisa dari belanja — belanja itu yang harusnya sisa dari nabung.',
+  'Dana darurat idealnya nutup 3-6 bulan pengeluaran. Mulai dari nominal kecil dulu juga gapapa, yang penting jalan.',
+  'Gaji cair, jangan langsung abis buat keinginan. Alokasiin ke Target Nabung dulu, baru sisanya buat have fun.',
+  'Toggle Wajib vs Keinginan itu bukan buat ngebatasin kamu — tapi biar kamu sadar, bukan kaget belakangan.',
+  'Cicilan tetep masuk kategori Wajib, meski barangnya buat keinginan. Konsisten aja nyatetnya.',
+  'Riba itu kelihatannya nolong di awal, tapi bunganya numpuk pelan-pelan. Coba cari alternatif yang lebih aman buat kantong.',
+  'Nyatet transaksi kecil kayak jajan 5 ribu juga penting — yang bikin boncos biasanya bukan yang gede, tapi yang keseringan.',
+  'Kalau bulan ini kebablasan, gapapa. Yang penting bulan depan diliat lagi, bukan diulang lagi.',
+  'Budget rollover bikin sisa bulan ini kebawa ke depan — tapi minus juga ikut kebawa. Jadi usahain balance ya.',
+  'Belanja diskon tetep belanja. Kalau emang gak butuh, diskon gede pun masih boncos.',
+  'Coba pisahin rekening buat Target Nabung dari rekening harian, biar gak gampang kepake.',
+  'Infak/zakat itu Wajib, bukan Keinginan — coba diprioritasin di awal, bukan nunggu ada sisa.',
+  'Cek Rekap Kirain tiap akhir siklus. Ketauan kok, kemana aja larinya duit kamu bulan ini.',
+  'Kalau ada dua goal nabung bareng, prioritasin yang paling penting dulu — gak harus keduanya jalan bareng dari nol.',
+  'Paylater kelihatan ringan di depan, tapi tetep utang. Kalkulasiin dulu sanggup gak nutupnya bulan depan.',
+  'Konsisten nyatet 2 minggu aja udah keliatan pola belanja kamu. Coba deh, jangan nyerah di hari ke-3.',
+  'Kalau budget kategori sering kelewat terus, mungkin bukan kamu yang boros — limitnya aja yang kekecilan. Sesuaiin lagi.',
+  'Transaksi berulang kayak internet atau langganan streaming, cek berkala — kadang ada yang udah gak kepake tapi masih jalan.',
+  'Emergency fund itu bukan buat healing, tapi buat kalau kepepet beneran (motor mogok, sakit, dll).',
+  'Naikin sedikit demi sedikit nominal nabung tiap gajian, daripada nunggu "pas lagi banyak duit".',
+  'Sebelum pinjem uang atau gesek kartu, coba itung dulu totalnya kalau kena bunga. Kadang lebih murah nunggu nabung.',
+  'Kategori kosong otomatis kesembunyiin — jadi kalau kamu emang gak pernah "Hobi", gak perlu bingung liat list yang penuh.',
+  'Duit gak kebawa mati, tapi hutang juga gak ilang gitu aja. Yuk dicicil pelan-pelan.',
+];

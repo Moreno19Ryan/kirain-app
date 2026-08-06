@@ -5,6 +5,8 @@ import '../../core/utils/format.dart';
 import '../../core/widgets/skeleton_box.dart';
 import '../categories/data/category.dart';
 import '../categories/data/category_repository.dart';
+import '../tips/data/tip_provider.dart';
+import '../tips/presentation/tip_card.dart';
 import 'data/dashboard_summary.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -13,6 +15,7 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final summaryAsync = ref.watch(dashboardSummaryProvider);
+    final tip = ref.watch(dailyTipProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('KIRAIN')),
@@ -23,6 +26,8 @@ class HomeScreen extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                TipCard(tip: tip),
+                const SizedBox(height: 16),
                 _BudgetSection(title: 'Progress Cukup', summary: summary.wajib),
                 const SizedBox(height: 24),
                 _BudgetSection(title: 'Keinginan', summary: summary.keinginan),
