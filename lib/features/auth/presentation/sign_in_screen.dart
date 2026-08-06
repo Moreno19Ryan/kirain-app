@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../data/auth_error.dart';
 import '../data/auth_repository.dart';
 
 class SignInScreen extends ConsumerStatefulWidget {
@@ -37,11 +38,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       await ref.read(authRepositoryProvider).sendOtp(email);
       if (!mounted) return;
       context.push('/verify-otp', extra: email);
-    } catch (_) {
-      setState(() {
-        _errorMessage =
-            'Yah, kode gagal dikirim. Coba cek internet kamu, atau tunggu bentar ya 🔌';
-      });
+    } catch (e) {
+      setState(() => _errorMessage = otpErrorMessage(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
