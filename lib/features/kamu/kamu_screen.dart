@@ -22,43 +22,67 @@ class KamuScreen extends ConsumerWidget {
             const SizedBox(height: 8),
             Text(email),
             const SizedBox(height: 24),
-            ListTile(
-              leading: const Icon(Icons.category_outlined),
-              title: const Text('Kelola Kategori'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push('/kelola-kategori'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.savings_outlined),
-              title: const Text('Target Nabung'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push('/target-nabung'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.repeat_outlined),
-              title: const Text('Transaksi Berulang'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push('/transaksi-berulang'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.event_repeat_outlined),
-              title: const Text('Siklus Budget'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push('/siklus-budget'),
-            ),
-            lockEnabledAsync.when(
-              data: (enabled) => SwitchListTile(
-                secondary: const Icon(Icons.lock_outline),
-                title: const Text('Kunci Aplikasi'),
-                subtitle: const Text('PIN + biometrik (kalau device support)'),
-                value: enabled,
-                onChanged: (value) =>
-                    value ? _setupAppLock(context, ref) : _disableAppLock(context, ref),
+            Expanded(
+              child: ListView(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.category_outlined),
+                    title: const Text('Kelola Kategori'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/kelola-kategori'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.savings_outlined),
+                    title: const Text('Target Nabung'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/target-nabung'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.repeat_outlined),
+                    title: const Text('Transaksi Berulang'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/transaksi-berulang'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.event_repeat_outlined),
+                    title: const Text('Siklus Budget'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/siklus-budget'),
+                  ),
+                  lockEnabledAsync.when(
+                    data: (enabled) => SwitchListTile(
+                      secondary: const Icon(Icons.lock_outline),
+                      title: const Text('Kunci Aplikasi'),
+                      subtitle: const Text('PIN + biometrik (kalau device support)'),
+                      value: enabled,
+                      onChanged: (value) =>
+                          value ? _setupAppLock(context, ref) : _disableAppLock(context, ref),
+                    ),
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, _) => const SizedBox.shrink(),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(Icons.help_outline),
+                    title: const Text('Bantuan'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/bantuan'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.privacy_tip_outlined),
+                    title: const Text('Kebijakan Privasi'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/kebijakan-privasi'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.description_outlined),
+                    title: const Text('Syarat & Ketentuan'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/syarat-ketentuan'),
+                  ),
+                ],
               ),
-              loading: () => const SizedBox.shrink(),
-              error: (_, _) => const SizedBox.shrink(),
             ),
-            const Spacer(),
             Padding(
               padding: const EdgeInsets.all(16),
               child: OutlinedButton(
