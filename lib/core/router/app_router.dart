@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quick_actions/quick_actions.dart';
 
 import '../../features/auth/data/auth_repository.dart';
 import '../../features/auth/presentation/otp_verify_screen.dart';
@@ -94,12 +95,29 @@ class _RootScaffold extends ConsumerStatefulWidget {
 }
 
 class _RootScaffoldState extends ConsumerState<_RootScaffold> {
+  static const _quickActions = QuickActions();
+  static const _catatBranchIndex = 1;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       checkAndPromptDueRecurring(context, ref);
     });
+    _setUpQuickActions();
+  }
+
+  /// Long-press the launcher icon -> straight to Catat, per CLAUDE.md's
+  /// "App shortcuts". Only reachable once signed in, since this widget only
+  /// mounts inside the authenticated shell — a cold start while signed out
+  /// just falls through to the normal sign-in redirect instead.
+  void _setUpQuickActions() {
+    _quickActions.initialize((type) {
+      if (type == 'catat') widget.navigationShell.goBranch(_catatBranchIndex);
+    });
+    _quickActions.setShortcutItems(const [
+      ShortcutItem(type: 'catat', localizedTitle: 'Catat Transaksi'),
+    ]);
   }
 
   @override
