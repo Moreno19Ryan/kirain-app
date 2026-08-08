@@ -10,6 +10,7 @@ import '../tips/data/tip_provider.dart';
 import '../tips/presentation/tip_card.dart';
 import '../transactions/data/transaction_repository.dart';
 import 'data/dashboard_summary.dart';
+import 'data/home_widget_sync.dart';
 import 'presentation/retroactive_entry_banner.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -18,6 +19,9 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final summaryAsync = ref.watch(dashboardSummaryProvider);
+    // Keeps the Android home-screen widget in step with whatever Home itself
+    // just loaded — same freshness Home already has, no extra fetching.
+    ref.listen(dashboardSummaryProvider, (_, next) => next.whenData(syncHomeWidget));
     final tip = ref.watch(dailyTipProvider);
     final isNewAccount = ref
         .watch(hasAnyTransactionsProvider)
