@@ -198,6 +198,46 @@ void main() {
     expect(find.textContaining('Baru mulai nih?'), findsNothing);
   });
 
+  testWidgets('manage categories screen shows a retry button on error and recovers on tap', (
+    tester,
+  ) async {
+    // Riverpod 3 retries a failed provider automatically several times
+    // before settling into a persistent error, so this doesn't count
+    // invocations — it just checks that tapping "Coba Lagi" after that
+    // point can still recover once the underlying fetch starts succeeding.
+    var shouldSucceed = false;
+    const categories = [
+      Category(
+        id: 'c1',
+        name: 'Makan & Minum',
+        kind: CategoryKind.expense,
+        expenseType: ExpenseType.wajib,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          categoriesProvider.overrideWith((ref) async {
+            if (!shouldSucceed) throw Exception('boom');
+            return categories;
+          }),
+        ],
+        child: const MaterialApp(home: ManageCategoriesScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Gagal muat kategori. Coba lagi ya.'), findsOneWidget);
+
+    shouldSucceed = true;
+    await tester.tap(find.text('Coba Lagi'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Gagal muat kategori. Coba lagi ya.'), findsNothing);
+    expect(find.text('Makan & Minum'), findsOneWidget);
+  });
+
   testWidgets('manage categories screen groups by Wajib/Keinginan/Pemasukan and confirms delete', (
     tester,
   ) async {

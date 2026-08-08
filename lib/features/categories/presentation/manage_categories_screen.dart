@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/widgets/error_retry_view.dart';
 import '../data/category.dart';
 import '../data/category_repository.dart';
 
@@ -21,7 +22,10 @@ class ManageCategoriesScreen extends ConsumerWidget {
       body: categoriesAsync.when(
         data: (categories) => _CategoryList(categories: categories),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => const Center(child: Text('Gagal muat kategori. Coba lagi ya.')),
+        error: (_, _) => ErrorRetryView(
+          message: 'Gagal muat kategori. Coba lagi ya.',
+          onRetry: () => ref.invalidate(categoriesProvider),
+        ),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/utils/format.dart';
+import '../../core/widgets/error_retry_view.dart';
 import '../../core/widgets/skeleton_box.dart';
 import '../categories/data/category.dart';
 import '../categories/data/category_repository.dart';
@@ -178,8 +179,10 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
               : categoriesAsync.when(
                   data: _buildForm,
                   loading: () => const _CatatSkeleton(),
-                  error: (_, _) =>
-                      const Center(child: Text('Gagal muat kategori. Coba lagi ya.')),
+                  error: (_, _) => ErrorRetryView(
+                    message: 'Gagal muat kategori. Coba lagi ya.',
+                    onRetry: () => ref.invalidate(categoriesProvider),
+                  ),
                 ),
         ),
       ),

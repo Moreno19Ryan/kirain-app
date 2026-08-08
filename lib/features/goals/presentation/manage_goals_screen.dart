@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/utils/format.dart';
+import '../../../core/widgets/error_retry_view.dart';
 import '../data/savings_goal.dart';
 import '../data/savings_goal_repository.dart';
 
@@ -40,7 +41,10 @@ class ManageGoalsScreen extends ConsumerWidget {
                 },
               ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => const Center(child: Text('Gagal muat target. Coba lagi ya.')),
+        error: (_, _) => ErrorRetryView(
+          message: 'Gagal muat target. Coba lagi ya.',
+          onRetry: () => ref.invalidate(savingsGoalsProvider),
+        ),
       ),
     );
   }

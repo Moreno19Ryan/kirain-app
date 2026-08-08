@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/error_retry_view.dart';
 import '../../home/data/dashboard_summary.dart';
 import '../data/budget_settings_repository.dart';
 
@@ -16,7 +17,10 @@ class BudgetCycleSettingsScreen extends ConsumerWidget {
       body: settingsAsync.when(
         data: (settings) => _SettingsForm(settings: settings),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => const Center(child: Text('Gagal muat pengaturan. Coba lagi ya.')),
+        error: (_, _) => ErrorRetryView(
+          message: 'Gagal muat pengaturan. Coba lagi ya.',
+          onRetry: () => ref.invalidate(budgetSettingsProvider),
+        ),
       ),
     );
   }
