@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/kirain_widget_background"
+    android:padding="12dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/widget_title"
+        android:textColor="@color/kirain_widget_on_primary"
+        android:textStyle="bold"
+        android:textSize="14sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="6dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/widget_label_wajib"
+            android:textColor="@color/kirain_widget_on_primary_muted"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_wajib_remaining"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/widget_placeholder"
+            android:textColor="@color/kirain_widget_on_primary"
+            android:textStyle="bold"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/widget_label_keinginan"
+            android:textColor="@color/kirain_widget_on_primary_muted"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_keinginan_remaining"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/widget_placeholder"
+            android:textColor="@color/kirain_widget_on_primary"
+            android:textStyle="bold"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/widget_catat_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/kirain_widget_button_background"
+        android:text="@string/widget_catat_button"
+        android:textAllCaps="false"
+        android:textColor="@color/kirain_widget_primary"
+        android:textSize="13sp" />
+</LinearLayout>

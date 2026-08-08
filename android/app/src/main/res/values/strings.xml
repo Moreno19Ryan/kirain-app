@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_title">KIRAIN</string>
+    <string name="widget_label_wajib">Progress Cukup</string>
+    <string name="widget_label_keinginan">Keinginan</string>
+    <string name="widget_placeholder">Buka app dulu ya</string>
+    <string name="widget_catat_button">+ Catat</string>
+    <string name="widget_description">Ringkasan sisa budget Wajib &amp; Keinginan, plus tombol Catat cepat.</string>
+</resources>

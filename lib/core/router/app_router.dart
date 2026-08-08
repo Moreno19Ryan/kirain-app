@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:quick_actions/quick_actions.dart';
 
 import '../../features/auth/data/auth_repository.dart';
@@ -111,6 +114,8 @@ class _RootScaffoldState extends ConsumerState<_RootScaffold> {
   static const _quickActions = QuickActions();
   static const _catatBranchIndex = 1;
 
+  StreamSubscription<Uri?>? _widgetClickSub;
+
   @override
   void initState() {
     super.initState();
@@ -123,6 +128,13 @@ class _RootScaffoldState extends ConsumerState<_RootScaffold> {
       await checkAndPromptGajianReminder(context, ref);
     });
     _setUpQuickActions();
+    _setUpHomeWidgetLaunch();
+  }
+
+  @override
+  void dispose() {
+    _widgetClickSub?.cancel();
+    super.dispose();
   }
 
   /// Long-press the launcher icon -> straight to Catat, per CLAUDE.md's
@@ -136,6 +148,20 @@ class _RootScaffoldState extends ConsumerState<_RootScaffold> {
     _quickActions.setShortcutItems(const [
       ShortcutItem(type: 'catat', localizedTitle: 'Catat Transaksi'),
     ]);
+  }
+
+  /// The home-screen widget's "Catat" button launches the app with a
+  /// `kirain://catat` uri (see KirainWidgetProvider.kt) — this covers both
+  /// a cold start from that tap and a tap while the app's already running
+  /// in the background, mirroring the quick-actions handling above.
+  void _setUpHomeWidgetLaunch() {
+    HomeWidget.initiallyLaunchedFromHomeWidget().then(_handleWidgetUri);
+    _widgetClickSub = HomeWidget.widgetClicked.listen(_handleWidgetUri);
+  }
+
+  void _handleWidgetUri(Uri? uri) {
+    if (!mounted) return;
+    if (uri?.host == 'catat') widget.navigationShell.goBranch(_catatBranchIndex);
   }
 
   @override

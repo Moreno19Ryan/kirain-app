@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fixed brand teal (matches app_theme.dart's colorSchemeSeed and the
+         splash screen) rather than a theme-following background — RemoteViews
+         can't easily follow system dark/light mode pre-API 31, so the widget
+         always uses its own high-contrast teal card + white text instead. -->
+    <color name="kirain_widget_primary">#009688</color>
+    <color name="kirain_widget_on_primary">#FFFFFF</color>
+    <color name="kirain_widget_on_primary_muted">#CCFFFFFF</color>
+</resources>
