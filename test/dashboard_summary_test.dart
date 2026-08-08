@@ -13,7 +13,12 @@ const _category = Category(
 void main() {
   group('BudgetGroupSummary', () {
     test('ratio is 0 with no items and no limit', () {
-      const summary = BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0);
+      const summary = BudgetGroupSummary(
+        items: [],
+        totalSpent: 0,
+        totalLimit: 0,
+        previousTotalSpent: 0,
+      );
       expect(summary.hasLimit, isFalse);
       expect(summary.ratio, 0);
     });
@@ -25,6 +30,7 @@ void main() {
         ],
         totalSpent: 50000,
         totalLimit: 100000,
+        previousTotalSpent: 0,
       );
       expect(summary.ratio, 0.5);
       expect(summary.totalRollover, 0);
@@ -40,6 +46,7 @@ void main() {
         ],
         totalSpent: 20000,
         totalLimit: -50000,
+        previousTotalSpent: 150000,
       );
       expect(summary.hasLimit, isTrue);
       expect(summary.ratio, 1);
@@ -53,9 +60,42 @@ void main() {
         ],
         totalSpent: 80000,
         totalLimit: 130000,
+        previousTotalSpent: 50000,
       );
       expect(summary.ratio, closeTo(0.615, 0.001));
       expect(summary.totalRollover, 30000);
+    });
+  });
+
+  group('BudgetGroupSummary.percentChangeFromPrevious', () {
+    test('is null when there was no spending last cycle', () {
+      const summary = BudgetGroupSummary(
+        items: [],
+        totalSpent: 50000,
+        totalLimit: 100000,
+        previousTotalSpent: 0,
+      );
+      expect(summary.percentChangeFromPrevious, isNull);
+    });
+
+    test('is positive when spending went up from last cycle', () {
+      const summary = BudgetGroupSummary(
+        items: [],
+        totalSpent: 150000,
+        totalLimit: 200000,
+        previousTotalSpent: 100000,
+      );
+      expect(summary.percentChangeFromPrevious, closeTo(50, 0.001));
+    });
+
+    test('is negative when spending went down from last cycle', () {
+      const summary = BudgetGroupSummary(
+        items: [],
+        totalSpent: 60000,
+        totalLimit: 200000,
+        previousTotalSpent: 100000,
+      );
+      expect(summary.percentChangeFromPrevious, closeTo(-40, 0.001));
     });
   });
 }

@@ -99,8 +99,9 @@ void main() {
         ],
         totalSpent: 150000,
         totalLimit: 100000,
+        previousTotalSpent: 0,
       ),
-      keinginan: const BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0),
+      keinginan: const BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0, previousTotalSpent: 0),
     );
 
     await tester.pumpWidget(
@@ -116,6 +117,40 @@ void main() {
     expect(find.text('Keinginan'), findsOneWidget);
   });
 
+  testWidgets('home dashboard shows the period-over-period comparison when there was prior spending', (
+    tester,
+  ) async {
+    const category = Category(
+      id: 'c1',
+      name: 'Makan & Minum',
+      kind: CategoryKind.expense,
+      expenseType: ExpenseType.wajib,
+      budgetLimit: 100000,
+    );
+
+    final summary = DashboardSummary(
+      wajib: const BudgetGroupSummary(
+        items: [
+          CategorySpend(category: category, spent: 75000, effectiveLimit: 100000, rollover: 0),
+        ],
+        totalSpent: 75000,
+        totalLimit: 100000,
+        previousTotalSpent: 50000,
+      ),
+      keinginan: const BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0, previousTotalSpent: 0),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [dashboardSummaryProvider.overrideWith((ref) async => summary)],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Naik 50% dari bulan lalu'), findsOneWidget);
+  });
+
   testWidgets('home dashboard flags Zona Waspada when a category nears its alert threshold', (
     tester,
   ) async {
@@ -129,13 +164,14 @@ void main() {
     );
 
     final summary = DashboardSummary(
-      wajib: const BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0),
+      wajib: const BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0, previousTotalSpent: 0),
       keinginan: const BudgetGroupSummary(
         items: [
           CategorySpend(category: category, spent: 85000, effectiveLimit: 100000, rollover: 0),
         ],
         totalSpent: 85000,
         totalLimit: 100000,
+        previousTotalSpent: 0,
       ),
     );
 
@@ -158,8 +194,8 @@ void main() {
     tester,
   ) async {
     const summary = DashboardSummary(
-      wajib: BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0),
-      keinginan: BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0),
+      wajib: BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0, previousTotalSpent: 0),
+      keinginan: BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0, previousTotalSpent: 0),
     );
 
     await tester.pumpWidget(
@@ -180,8 +216,8 @@ void main() {
     tester,
   ) async {
     const summary = DashboardSummary(
-      wajib: BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0),
-      keinginan: BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0),
+      wajib: BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0, previousTotalSpent: 0),
+      keinginan: BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0, previousTotalSpent: 0),
     );
 
     await tester.pumpWidget(

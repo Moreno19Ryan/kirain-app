@@ -33,6 +33,7 @@ class BudgetGroupSummary {
     required this.items,
     required this.totalSpent,
     required this.totalLimit,
+    required this.previousTotalSpent,
   });
 
   final List<CategorySpend> items;
@@ -41,6 +42,11 @@ class BudgetGroupSummary {
   /// Sum of each item's effective (post-rollover) limit.
   final num totalLimit;
 
+  /// Actual spend in the immediately preceding cycle, regardless of the
+  /// rollover setting — used only for the "naik/turun X% dari bulan lalu"
+  /// indicator, not for budget math.
+  final num previousTotalSpent;
+
   num get totalRollover => items.fold<num>(0, (sum, i) => sum + i.rollover);
 
   bool get hasLimit => items.any((i) => (i.category.budgetLimit ?? 0) > 0);
@@ -48,6 +54,13 @@ class BudgetGroupSummary {
   double get ratio {
     if (totalLimit <= 0) return hasLimit ? 1 : 0;
     return totalSpent / totalLimit;
+  }
+
+  /// Null when there's nothing meaningful to compare against (no spending
+  /// last cycle) — the indicator hides itself in that case.
+  double? get percentChangeFromPrevious {
+    if (previousTotalSpent <= 0) return null;
+    return (totalSpent - previousTotalSpent) / previousTotalSpent * 100;
   }
 }
 
@@ -86,9 +99,10 @@ final dashboardSummaryProvider = FutureProvider<DashboardSummary>((ref) async {
   final categories = await ref.watch(categoriesProvider.future);
   final transactions = await ref.watch(currentCycleTransactionsProvider.future);
   final settings = await ref.watch(budgetSettingsProvider.future);
-  final previousTransactions = settings.rolloverEnabled
-      ? await ref.watch(previousCycleTransactionsProvider.future)
-      : const <TransactionRow>[];
+  // Fetched unconditionally (unlike the rollover math below, which only
+  // applies it when the setting's on) since the period-comparison indicator
+  // needs last cycle's actual spend either way.
+  final previousTransactions = await ref.watch(previousCycleTransactionsProvider.future);
 
   final expenseCategories = categories.where((c) => c.kind == CategoryKind.expense);
 
@@ -124,8 +138,16 @@ final dashboardSummaryProvider = FutureProvider<DashboardSummary>((ref) async {
 
     final totalSpent = items.fold<num>(0, (sum, i) => sum + i.spent);
     final totalLimit = items.fold<num>(0, (sum, i) => sum + i.effectiveLimit);
+    final previousTotalSpent = previousTransactions
+        .where((t) => t.expenseType == type)
+        .fold<num>(0, (sum, t) => sum + t.amount);
 
-    return BudgetGroupSummary(items: items, totalSpent: totalSpent, totalLimit: totalLimit);
+    return BudgetGroupSummary(
+      items: items,
+      totalSpent: totalSpent,
+      totalLimit: totalLimit,
+      previousTotalSpent: previousTotalSpent,
+    );
   }
 
   return DashboardSummary(
