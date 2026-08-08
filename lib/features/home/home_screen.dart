@@ -125,6 +125,7 @@ class _BudgetSection extends StatelessWidget {
                   ),
               ],
             ),
+            _PeriodComparisonLabel(summary: summary),
             const SizedBox(height: 8),
             if (!hasLimit)
               const Text('Belum ada limit yang diset buat kategori ini.')
@@ -173,6 +174,46 @@ class _BudgetSection extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PeriodComparisonLabel extends StatelessWidget {
+  const _PeriodComparisonLabel({required this.summary});
+
+  final BudgetGroupSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final change = summary.percentChangeFromPrevious;
+    if (change == null) return const SizedBox.shrink();
+
+    final rounded = change.abs().round();
+    final String text;
+    final IconData icon;
+    if (rounded == 0) {
+      text = 'Sama kayak bulan lalu';
+      icon = Icons.horizontal_rule;
+    } else if (change > 0) {
+      text = 'Naik $rounded% dari bulan lalu';
+      icon = Icons.arrow_upward;
+    } else {
+      text = 'Turun $rounded% dari bulan lalu';
+      icon = Icons.arrow_downward;
+    }
+
+    final color = Theme.of(context).textTheme.bodySmall?.color;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(text, style: Theme.of(context).textTheme.bodySmall),
+        ],
       ),
     );
   }
