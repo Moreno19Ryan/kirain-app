@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../app_lock/data/app_lock_repository.dart';
 import '../auth/data/auth_repository.dart';
+import 'data/account_repository.dart';
 
 class KamuScreen extends ConsumerWidget {
   const KamuScreen({super.key});
@@ -79,6 +80,19 @@ class KamuScreen extends ConsumerWidget {
                     title: const Text('Syarat & Ketentuan'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => context.push('/syarat-ketentuan'),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: Icon(
+                      Icons.delete_forever_outlined,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    title: Text(
+                      'Hapus Akun',
+                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    ),
+                    subtitle: const Text('Permanen, gak bisa dikembalikan lagi'),
+                    onTap: () => _confirmDeleteAccount(context, ref),
                   ),
                 ],
               ),
@@ -211,4 +225,84 @@ Future<void> _disableAppLock(BuildContext context, WidgetRef ref) async {
 
   await ref.read(appLockRepositoryProvider).disable();
   ref.invalidate(appLockEnabledProvider);
+}
+
+/// Irreversible, so this asks for more than a tap — typing the exact
+/// confirmation word, same pattern many apps use for destructive account
+/// actions, on top of CLAUDE.md's usual "Yakin nih?" dialog.
+Future<void> _confirmDeleteAccount(BuildContext context, WidgetRef ref) async {
+  final confirmController = TextEditingController();
+  var isDeleting = false;
+  String? error;
+
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          final canConfirm = confirmController.text.trim().toUpperCase() == 'HAPUS';
+
+          return AlertDialog(
+            title: const Text('Yakin banget nih?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Semua data kamu — transaksi, kategori, target nabung, '
+                  'semuanya — bakal dihapus permanen. Ini gak bisa '
+                  'dikembalikan lagi.',
+                ),
+                const SizedBox(height: 12),
+                Text('Ketik HAPUS buat konfirmasi.'),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: confirmController,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: InputDecoration(labelText: 'Ketik HAPUS', errorText: error),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isDeleting ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Batal'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                ),
+                onPressed: !canConfirm || isDeleting
+                    ? null
+                    : () async {
+                        setDialogState(() {
+                          isDeleting = true;
+                          error = null;
+                        });
+                        try {
+                          await ref.read(accountRepositoryProvider).deleteAccount();
+                          if (dialogContext.mounted) Navigator.pop(dialogContext);
+                          await ref.read(authRepositoryProvider).signOut();
+                        } catch (_) {
+                          setDialogState(() {
+                            isDeleting = false;
+                            error = 'Yah, gagal hapus akun. Coba lagi ya.';
+                          });
+                        }
+                      },
+                child: isDeleting
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Hapus Akun Aku'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
 }
