@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/format.dart';
+import '../../../core/widgets/error_retry_view.dart';
 import '../../categories/data/category.dart';
 import '../../categories/data/category_repository.dart';
 import '../data/recurring_transaction.dart';
@@ -37,8 +38,10 @@ class ManageRecurringScreen extends ConsumerWidget {
                 itemBuilder: (context, index) => _RuleCard(item: items[index]),
               ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) =>
-            const Center(child: Text('Gagal muat transaksi berulang. Coba lagi ya.')),
+        error: (_, _) => ErrorRetryView(
+          message: 'Gagal muat transaksi berulang. Coba lagi ya.',
+          onRetry: () => ref.invalidate(recurringTransactionsProvider),
+        ),
       ),
     );
   }

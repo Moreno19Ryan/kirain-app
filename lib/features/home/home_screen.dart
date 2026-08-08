@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/utils/format.dart';
+import '../../core/widgets/error_retry_view.dart';
 import '../../core/widgets/skeleton_box.dart';
 import '../categories/data/category.dart';
 import '../categories/data/category_repository.dart';
@@ -44,7 +45,10 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
           loading: () => const _HomeSkeleton(),
-          error: (_, _) => const Center(child: Text('Gagal muat data. Coba lagi ya.')),
+          error: (_, _) => ErrorRetryView(
+            message: 'Gagal muat data. Coba lagi ya.',
+            onRetry: () => ref.invalidate(dashboardSummaryProvider),
+          ),
         ),
       ),
     );
