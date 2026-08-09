@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/theme/kirain_colors.dart';
 import '../../../core/widgets/error_retry_view.dart';
 import '../data/category.dart';
+import '../data/category_icons.dart';
 import '../data/category_repository.dart';
 
 class ManageCategoriesScreen extends ConsumerWidget {
@@ -88,8 +90,17 @@ class _CategoryListTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final limit = category.budgetLimit;
+    final theme = Theme.of(context);
+    final kirainColors = theme.extension<KirainColors>();
+    final iconColor = categoryIconColor(
+      category: category,
+      mint: kirainColors?.mint ?? theme.colorScheme.primary,
+      coral: kirainColors?.coral ?? theme.colorScheme.secondary,
+      neutral: theme.colorScheme.onSurfaceVariant,
+    );
 
     return ListTile(
+      leading: Icon(categoryIcon(category), color: iconColor),
       title: Text(category.name),
       subtitle: category.kind == CategoryKind.expense
           ? Text(limit == null || limit == 0 ? 'Belum ada limit' : 'Limit Rp ${limit.toStringAsFixed(0)}')
