@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/kirain_colors.dart';
 import '../../core/utils/format.dart';
 import '../../core/widgets/error_retry_view.dart';
 import '../../core/widgets/skeleton_box.dart';
 import '../categories/data/category.dart';
+import '../categories/data/category_icons.dart';
 import '../categories/data/category_repository.dart';
+import '../goals/data/savings_goal.dart';
+import '../goals/data/savings_goal_repository.dart';
+import '../home/data/dashboard_summary.dart';
 import '../transactions/data/transaction_repository.dart';
 import 'data/riba_detector.dart';
+
+enum _CatatMode { transaksi, nabung }
 
 class CatatScreen extends ConsumerStatefulWidget {
   const CatatScreen({super.key});
@@ -21,29 +28,48 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
 
+  _CatatMode _mode = _CatatMode.transaksi;
   Category? _selectedCategory;
   ExpenseType? _expenseType;
+  SavingsGoal? _selectedGoal;
   DateTime _transactionDate = DateTime.now();
   bool _isSaving = false;
   String? _errorMessage;
   _SavedSummary? _lastSaved;
 
   @override
+  void initState() {
+    super.initState();
+    // Drives the inline riba banner live as the user types, per CLAUDE.md's
+    // "soft warning inline" requirement — no dialog gate at submit anymore.
+    _noteController.addListener(_onNoteChanged);
+  }
+
+  @override
   void dispose() {
+    _noteController.removeListener(_onNoteChanged);
     _amountController.dispose();
     _noteController.dispose();
     super.dispose();
   }
 
-  void _onCategoryChanged(Category? category) {
+  void _onNoteChanged() => setState(() {});
+
+  void _onCategorySelected(Category category) {
     setState(() {
       _selectedCategory = category;
-      _expenseType = category?.expenseType;
+      _expenseType = category.expenseType;
     });
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_mode == _CatatMode.nabung) {
+      await _submitSavingsContribution();
+      return;
+    }
+
     if (_selectedCategory == null) {
       setState(() => _errorMessage = 'Pilih kategori dulu ya');
       return;
@@ -51,6 +77,15 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
 
     final amount = num.parse(_amountController.text.trim());
     final category = _selectedCategory!;
+    final effectiveType = category.kind == CategoryKind.expense ? _expenseType : null;
+
+    if (effectiveType == ExpenseType.keinginan) {
+      final wajib = ref.read(dashboardSummaryProvider).value?.wajib;
+      if (wajib != null && wajib.hasLimit && wajib.ratio < 1.0) {
+        final proceed = await _showCheckoutWarning(wajib.ratio);
+        if (proceed != true) return;
+      }
+    }
 
     setState(() {
       _isSaving = true;
@@ -68,25 +103,56 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
         if (proceed != true) return;
       }
 
-      final note = _noteController.text.trim();
-      if (note.isNotEmpty && looksLikeRiba(note)) {
-        if (!mounted) return;
-        await _showRibaNotice();
-      }
-
       await ref
           .read(transactionRepositoryProvider)
           .addTransaction(
             categoryId: category.id,
             amount: amount,
             note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
-            expenseType: category.kind == CategoryKind.expense ? _expenseType : null,
+            expenseType: effectiveType,
             transactionDate: _transactionDate,
           );
 
       setState(() {
         _lastSaved = _SavedSummary(category: category.name, amount: amount);
       });
+      ref.invalidate(dashboardSummaryProvider);
+    } catch (_) {
+      setState(() {
+        _errorMessage = 'Yah, gagal kesimpen. Coba cek internet kamu ya 🔌';
+      });
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _submitSavingsContribution() async {
+    final goal = _selectedGoal;
+    if (goal == null) {
+      setState(() => _errorMessage = 'Pilih target nabung dulu ya');
+      return;
+    }
+
+    final amount = num.parse(_amountController.text.trim());
+
+    setState(() {
+      _isSaving = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await ref
+          .read(savingsGoalRepositoryProvider)
+          .contribute(
+            goalId: goal.id,
+            amount: amount,
+            note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
+          );
+
+      setState(() {
+        _lastSaved = _SavedSummary(category: goal.name, amount: amount);
+      });
+      ref.invalidate(savingsGoalsProvider);
     } catch (_) {
       setState(() {
         _errorMessage = 'Yah, gagal kesimpen. Coba cek internet kamu ya 🔌';
@@ -120,25 +186,86 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
     );
   }
 
-  /// Educational, not blocking — per CLAUDE.md, this only ever informs, it
-  /// never gates the save. A single acknowledgement button, then the
-  /// transaction saves right after regardless.
-  Future<void> _showRibaNotice() {
-    return showDialog<void>(
+  /// Soft, non-blocking checkout warning from kirain-states-mockup.jsx —
+  /// shown only when this transaction would land in Keinginan while Wajib
+  /// still isn't fully covered. The two buttons carry different visual
+  /// weight on purpose ("Cek lagi" neutral, "Lanjut Catat" positive/mint) so
+  /// proceeding never feels like being punished.
+  Future<bool?> _showCheckoutWarning(double wajibRatio) {
+    final theme = Theme.of(context);
+    final coral = theme.extension<KirainColors>()?.coral ?? theme.colorScheme.secondary;
+    final pct = (wajibRatio * 100).round();
+
+    return showModalBottomSheet<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Eh, tunggu dulu'),
-        content: const Text(
-          'Eh, ini kedengeran kayak transaksi berbunga (riba) ya? Yuk coba '
-          'dipikir ulang, atau kalau emang udah jalan, yuk kita bantu '
-          'lunasin secepatnya 🙏',
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Oke, Paham'),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 18),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.outline,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: coral.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.warning_amber_rounded, color: coral, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Eh tunggu dulu', style: theme.textTheme.titleMedium),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Kebutuhan wajib bulan ini belum full nih (masih $pct%). '
+                          'Yakin mau lanjut catat yang ini?',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(sheetContext, false),
+                      child: const Text('Cek lagi'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => Navigator.pop(sheetContext, true),
+                      child: const Text('Lanjut Catat'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -168,6 +295,10 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
   @override
   Widget build(BuildContext context) {
     final categoriesAsync = ref.watch(categoriesProvider);
+    // Warmed here (not just read at submit time) so it's already resolved
+    // by the time the user taps "Oke, Catat" — the checkout-warning check
+    // needs the data synchronously at that point.
+    ref.watch(dashboardSummaryProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Catat')),
@@ -190,13 +321,35 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
   }
 
   Widget _buildForm(List<Category> categories) {
-    final expenseCategories = categories.where((c) => c.kind == CategoryKind.expense).toList();
+    final wajibCategories = categories
+        .where((c) => c.kind == CategoryKind.expense && c.expenseType == ExpenseType.wajib)
+        .toList();
+    final keinginanCategories = categories
+        .where((c) => c.kind == CategoryKind.expense && c.expenseType == ExpenseType.keinginan)
+        .toList();
     final incomeCategories = categories.where((c) => c.kind == CategoryKind.income).toList();
+    final theme = Theme.of(context);
+    final kirainColors = theme.extension<KirainColors>();
+    final mint = kirainColors?.mint ?? theme.colorScheme.primary;
+    final coral = kirainColors?.coral ?? theme.colorScheme.secondary;
+    final neutral = theme.colorScheme.onSurfaceVariant;
 
     return Form(
       key: _formKey,
       child: ListView(
         children: [
+          // Reflects the exclusive category_id / goal_id constraint on the
+          // transactions table — the two modes are mutually exclusive, never
+          // shown at once.
+          SegmentedButton<_CatatMode>(
+            segments: const [
+              ButtonSegment(value: _CatatMode.transaksi, label: Text('Transaksi')),
+              ButtonSegment(value: _CatatMode.nabung, label: Text('Nabung')),
+            ],
+            selected: {_mode},
+            onSelectionChanged: (selection) => setState(() => _mode = selection.first),
+          ),
+          const SizedBox(height: 20),
           TextFormField(
             controller: _amountController,
             keyboardType: const TextInputType.numberWithOptions(decimal: false),
@@ -207,31 +360,63 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
               return null;
             },
           ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<Category>(
-            initialValue: _selectedCategory,
-            decoration: const InputDecoration(labelText: 'Kategori', border: OutlineInputBorder()),
-            items: [
-              ...expenseCategories.map(
-                (c) => DropdownMenuItem(value: c, child: Text(c.name)),
-              ),
-              ...incomeCategories.map(
-                (c) => DropdownMenuItem(value: c, child: Text('${c.name} (Pemasukan)')),
-              ),
-            ],
-            onChanged: _onCategoryChanged,
-          ),
-          if (_selectedCategory?.kind == CategoryKind.expense) ...[
-            const SizedBox(height: 16),
-            SegmentedButton<ExpenseType>(
-              segments: const [
-                ButtonSegment(value: ExpenseType.wajib, label: Text('Wajib')),
-                ButtonSegment(value: ExpenseType.keinginan, label: Text('Keinginan')),
-              ],
-              selected: {_expenseType ?? ExpenseType.keinginan},
-              onSelectionChanged: (selection) => setState(() => _expenseType = selection.first),
+          const SizedBox(height: 20),
+          if (_mode == _CatatMode.transaksi) ...[
+            Text('Kategori', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 12),
+            _CategorySection(
+              title: 'Wajib',
+              categories: wajibCategories,
+              color: mint,
+              selected: _selectedCategory,
+              onSelected: _onCategorySelected,
             ),
-          ],
+            _CategorySection(
+              title: 'Keinginan',
+              categories: keinginanCategories,
+              color: coral,
+              selected: _selectedCategory,
+              onSelected: _onCategorySelected,
+            ),
+            _CategorySection(
+              title: 'Pemasukan',
+              categories: incomeCategories,
+              color: neutral,
+              selected: _selectedCategory,
+              onSelected: _onCategorySelected,
+            ),
+            if (_selectedCategory?.kind == CategoryKind.expense) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Ini termasuk yang mana? (bisa diubah dari default kategori)',
+                style: theme.textTheme.bodySmall?.copyWith(color: neutral),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _TypeTogglePill(
+                      label: 'Wajib',
+                      color: mint,
+                      active: _expenseType == ExpenseType.wajib,
+                      onTap: () => setState(() => _expenseType = ExpenseType.wajib),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _TypeTogglePill(
+                      label: 'Keinginan',
+                      color: coral,
+                      active: _expenseType == ExpenseType.keinginan,
+                      onTap: () => setState(() => _expenseType = ExpenseType.keinginan),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          ] else
+            _GoalPicker(selected: _selectedGoal, onSelected: (g) => setState(() => _selectedGoal = g)),
           const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: _pickDate,
@@ -246,9 +431,13 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
               border: OutlineInputBorder(),
             ),
           ),
+          if (_mode == _CatatMode.transaksi && looksLikeRiba(_noteController.text)) ...[
+            const SizedBox(height: 12),
+            _RibaBanner(coral: coral),
+          ],
           if (_errorMessage != null) ...[
             const SizedBox(height: 12),
-            Text(_errorMessage!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            Text(_errorMessage!, style: TextStyle(color: theme.colorScheme.error)),
           ],
           const SizedBox(height: 24),
           FilledButton(
@@ -267,6 +456,243 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
   }
 }
 
+/// One Wajib/Keinginan/Pemasukan group of horizontally-scrollable category
+/// chips — hides itself entirely when the user has no categories of that
+/// kind, same auto-collapse spirit as Home's empty-category handling.
+class _CategorySection extends StatelessWidget {
+  const _CategorySection({
+    required this.title,
+    required this.categories,
+    required this.color,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final String title;
+  final List<Category> categories;
+  final Color color;
+  final Category? selected;
+  final ValueChanged<Category> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (categories.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title.toUpperCase(),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              letterSpacing: 0.4,
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 92,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: categories.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              itemBuilder: (context, index) {
+                final category = categories[index];
+                return _CategoryChip(
+                  category: category,
+                  color: color,
+                  active: selected?.id == category.id,
+                  onTap: () => onSelected(category),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryChip extends StatelessWidget {
+  const _CategoryChip({
+    required this.category,
+    required this.color,
+    required this.active,
+    required this.onTap,
+  });
+
+  final Category category;
+  final Color color;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final iconColor = active
+        ? categoryIconColor(
+            category: category,
+            mint: theme.colorScheme.onPrimary,
+            coral: theme.colorScheme.onSecondary,
+            neutral: theme.colorScheme.onSurface,
+          )
+        : color;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        width: 68,
+        child: Column(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: active ? color : color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: active ? color : theme.colorScheme.outline,
+                  width: active ? 2 : 1,
+                ),
+              ),
+              child: Icon(categoryIcon(category), color: iconColor, size: 20),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              category.name,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: active ? theme.colorScheme.onSurface : theme.colorScheme.onSurfaceVariant,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TypeTogglePill extends StatelessWidget {
+  const _TypeTogglePill({
+    required this.label,
+    required this.color,
+    required this.active,
+    required this.onTap,
+  });
+
+  final String label;
+  final Color color;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active ? color.withValues(alpha: 0.16) : theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: active ? color : theme.colorScheme.outline, width: active ? 2 : 1),
+        ),
+        child: Text(
+          label,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: active ? color : theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Inline, non-blocking — replaces the old submit-time dialog so the notice
+/// shows up live as the user types instead of gating the save.
+class _RibaBanner extends StatelessWidget {
+  const _RibaBanner({required this.coral});
+
+  final Color coral;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: coral.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: coral.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 18, color: coral),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Eh, ini kedengerannya kayak transaksi berbunga (riba) ya? Yuk coba '
+              'dipikir ulang, atau kalau emang udah jalan, yuk kita bantu lunasin '
+              'secepatnya 🙏',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GoalPicker extends ConsumerWidget {
+  const _GoalPicker({required this.selected, required this.onSelected});
+
+  final SavingsGoal? selected;
+  final ValueChanged<SavingsGoal?> onSelected;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final goalsAsync = ref.watch(savingsGoalsProvider);
+
+    return goalsAsync.when(
+      data: (goals) {
+        if (goals.isEmpty) {
+          return const Text(
+            'Belum ada Target Nabung nih. Yuk bikin dulu dari menu Kamu > Target Nabung 👀',
+          );
+        }
+        return DropdownButtonFormField<SavingsGoal>(
+          initialValue: selected,
+          decoration: const InputDecoration(labelText: 'Target Nabung', border: OutlineInputBorder()),
+          items: goals
+              .map(
+                (g) => DropdownMenuItem(
+                  value: g,
+                  child: Text('${g.name} (${(g.progress * 100).round()}%)'),
+                ),
+              )
+              .toList(),
+          onChanged: onSelected,
+        );
+      },
+      loading: () => const SkeletonBox(height: 56),
+      error: (_, _) => ErrorRetryView(
+        message: 'Gagal muat target nabung. Coba lagi ya.',
+        onRetry: () => ref.invalidate(savingsGoalsProvider),
+      ),
+    );
+  }
+}
+
 class _CatatSkeleton extends StatelessWidget {
   const _CatatSkeleton();
 
@@ -274,9 +700,11 @@ class _CatatSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       children: const [
+        SkeletonBox(height: 40),
+        SizedBox(height: 20),
         SkeletonBox(height: 56),
-        SizedBox(height: 16),
-        SkeletonBox(height: 56),
+        SizedBox(height: 20),
+        SkeletonBox(height: 92),
         SizedBox(height: 16),
         SkeletonBox(height: 56),
         SizedBox(height: 24),
