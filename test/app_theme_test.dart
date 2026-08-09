@@ -4,6 +4,11 @@ import 'package:kirain/core/theme/app_theme.dart';
 import 'package:kirain/core/theme/kirain_colors.dart';
 
 void main() {
+  // google_fonts checks the asset bundle for a pre-bundled font before
+  // falling back to network, which needs a binding even in a plain (non
+  // testWidgets) test file.
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('AppTheme.dark', () {
     final scheme = AppTheme.dark.colorScheme;
 
@@ -35,6 +40,24 @@ void main() {
       expect(colors.mintStrong, colors.mint);
       expect(colors.coral, const Color(0xFFFF8B5E));
       expect(colors.coralStrong, colors.coral);
+    });
+
+    test('display/heading/title roles use Sora, body/label roles use Inter', () {
+      final text = AppTheme.dark.textTheme;
+      // google_fonts composes fontFamily as "Family_weight" internally, but
+      // always keeps the plain family name as the first fallback — that's
+      // the stable thing to assert against.
+      for (final style in [text.displayLarge, text.headlineMedium, text.titleSmall]) {
+        expect(style?.fontFamilyFallback, contains('Sora'));
+      }
+      for (final style in [text.bodyLarge, text.bodyMedium, text.labelSmall]) {
+        expect(style?.fontFamilyFallback, contains('Inter'));
+      }
+    });
+
+    test('text theme colors default to the text token', () {
+      expect(AppTheme.dark.textTheme.bodyMedium?.color, const Color(0xFFF2F5F3));
+      expect(AppTheme.dark.textTheme.headlineMedium?.color, const Color(0xFFF2F5F3));
     });
   });
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'kirain_colors.dart';
 
@@ -75,7 +76,31 @@ class AppTheme {
       colorScheme: colorScheme,
       scaffoldBackgroundColor: bg,
       cardTheme: CardThemeData(color: surface, surfaceTintColor: Colors.transparent),
+      textTheme: _textTheme(brightness: brightness, text: text),
       extensions: [kirainColors],
     );
+  }
+
+  /// Display/heading/angka -> Sora, body/label -> Inter, per CLAUDE.md 6.5's
+  /// "Tipografi — FINAL". Built off Material 3's default sizes/weights so
+  /// nothing else about the type scale changes, just the font families.
+  static TextTheme _textTheme({required Brightness brightness, required Color text}) {
+    final base = ThemeData(brightness: brightness, useMaterial3: true).textTheme;
+    final sora = GoogleFonts.soraTextTheme(base);
+    final inter = GoogleFonts.interTextTheme(base);
+
+    return inter
+        .copyWith(
+          displayLarge: sora.displayLarge,
+          displayMedium: sora.displayMedium,
+          displaySmall: sora.displaySmall,
+          headlineLarge: sora.headlineLarge,
+          headlineMedium: sora.headlineMedium,
+          headlineSmall: sora.headlineSmall,
+          titleLarge: sora.titleLarge,
+          titleMedium: sora.titleMedium,
+          titleSmall: sora.titleSmall,
+        )
+        .apply(bodyColor: text, displayColor: text);
   }
 }
