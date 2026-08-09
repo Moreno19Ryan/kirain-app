@@ -117,6 +117,101 @@ void main() {
     expect(find.text('Keinginan'), findsOneWidget);
   });
 
+  testWidgets('home dashboard flags Zona Aman when Wajib is under its limit', (tester) async {
+    const category = Category(
+      id: 'c1',
+      name: 'Makan & Minum',
+      kind: CategoryKind.expense,
+      expenseType: ExpenseType.wajib,
+      budgetLimit: 100000,
+    );
+
+    final summary = DashboardSummary(
+      wajib: const BudgetGroupSummary(
+        items: [
+          CategorySpend(category: category, spent: 29000, effectiveLimit: 100000, rollover: 0),
+        ],
+        totalSpent: 29000,
+        totalLimit: 100000,
+        previousTotalSpent: 0,
+      ),
+      keinginan: const BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0, previousTotalSpent: 0),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [dashboardSummaryProvider.overrideWith((ref) async => summary)],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Zona Aman'), findsOneWidget);
+    expect(find.text('29%'), findsOneWidget);
+    expect(find.text('Zona Kirain'), findsNothing);
+  });
+
+  testWidgets('home dashboard shows "Belum Ada Limit" when Wajib has no limit set at all', (
+    tester,
+  ) async {
+    const summary = DashboardSummary(
+      wajib: BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0, previousTotalSpent: 0),
+      keinginan: BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0, previousTotalSpent: 0),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          dashboardSummaryProvider.overrideWith((ref) async => summary),
+          hasAnyTransactionsProvider.overrideWith((ref) async => true),
+        ],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Belum Ada Limit'), findsOneWidget);
+    expect(find.text('Zona Aman'), findsNothing);
+    expect(find.text('Zona Kirain'), findsNothing);
+  });
+
+  testWidgets('home dashboard shows a specific icon per category in its detail section', (
+    tester,
+  ) async {
+    const category = Category(
+      id: 'c1',
+      name: 'Makan & Minum',
+      kind: CategoryKind.expense,
+      expenseType: ExpenseType.wajib,
+      budgetLimit: 100000,
+    );
+
+    final summary = DashboardSummary(
+      wajib: const BudgetGroupSummary(
+        items: [
+          CategorySpend(category: category, spent: 50000, effectiveLimit: 100000, rollover: 0),
+        ],
+        totalSpent: 50000,
+        totalLimit: 100000,
+        previousTotalSpent: 0,
+      ),
+      keinginan: const BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0, previousTotalSpent: 0),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [dashboardSummaryProvider.overrideWith((ref) async => summary)],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Rincian Wajib'));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.restaurant_outlined), findsOneWidget);
+  });
+
   testWidgets('home dashboard shows the period-over-period comparison when there was prior spending', (
     tester,
   ) async {
@@ -183,7 +278,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Rincian per kategori'));
+    await tester.tap(find.text('Rincian Keinginan'));
     await tester.pumpAndSettle();
 
     expect(find.text('Zona Waspada — udah mendekati limit nih'), findsOneWidget);
