@@ -150,16 +150,16 @@ class _BudgetSection extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 summary.totalLimit > 0
-                    ? 'Rp ${formatRupiah(summary.totalSpent)} dari Rp ${formatRupiah(summary.totalLimit)}'
-                    : 'Rp ${formatRupiah(summary.totalSpent)} dari Rp 0 (limit abis kepake defisit bulan lalu)',
+                    ? 'Rp ${formatRupiahShort(summary.totalSpent)} dari Rp ${formatRupiahShort(summary.totalLimit)}'
+                    : 'Rp ${formatRupiahShort(summary.totalSpent)} dari Rp 0 (limit abis kepake defisit bulan lalu)',
               ),
               if (summary.totalRollover != 0)
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
                   child: Text(
                     summary.totalRollover > 0
-                        ? 'Termasuk bawaan bulan lalu: +Rp ${formatRupiah(summary.totalRollover)}'
-                        : 'Termasuk bawaan defisit bulan lalu: -Rp ${formatRupiah(summary.totalRollover.abs())}',
+                        ? 'Termasuk bawaan bulan lalu: +Rp ${formatRupiahShort(summary.totalRollover)}'
+                        : 'Termasuk bawaan defisit bulan lalu: -Rp ${formatRupiahShort(summary.totalRollover.abs())}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),

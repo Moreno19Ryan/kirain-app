@@ -307,6 +307,12 @@ void main() {
     expect(find.text('Makan & Minum'), findsOneWidget);
     expect(find.text('Gaji'), findsOneWidget);
 
+    // Each row shows its own specific icon, not a shared generic one.
+    expect(find.byIcon(Icons.restaurant_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.local_cafe_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.account_balance_wallet_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.category_outlined), findsNothing);
+
     await tester.tap(find.byIcon(Icons.delete_outline).first);
     await tester.pumpAndSettle();
 
