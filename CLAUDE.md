@@ -258,6 +258,38 @@ Arah yang dipilih: **mint + coral**, dark mode dengan background hijau-gelap han
 
 
 
+### Implementasi ColorScheme — WAJIB Eksplisit (bukan fromSeed)
+> Ditemukan dari testing di device asli: pakai `ColorScheme.fromSeed(seedColor: ...).copyWith(...)` menghasilkan tone pastel/desaturated di slot yang TIDAK di-override manual (surface container, outline, onSurfaceVariant, dst), sehingga elemen seperti icon kategori jadi nyaris tak terlihat (mint di atas background mint pucat).
+
+**Aturan implementasi:** definisikan `ColorScheme` secara **eksplisit lengkap** (semua field relevan: `surface`, `surfaceContainer`/`surfaceContainerHighest`, `outline`, `outlineVariant`, `onSurface`, `onSurfaceVariant`, `primary`, `onPrimary`, `secondary`, `onSecondary`, `error`, `onError`) memakai hex persis dari tabel token di atas — JANGAN mengandalkan hasil turunan algoritmis dari `fromSeed` untuk slot manapun yang terlihat di UI. Verifikasi juga bahwa `mintStrong`/`coralStrong` benar-benar dipakai untuk warna teks/icon langsung di light mode (bukan cuma didefinisikan tapi tidak di-wire).
+
+### Liquid Glass — Elemen Visual Tambahan (ditambahkan setelah testing awal)
+Terinspirasi dari kualitas polish Samsung One UI / iOS, dan konsisten dengan pattern yang sudah pernah diterapkan di GENSITI (hybrid liquid glass nav bar). Diterapkan selektif — BUKAN di semua elemen, supaya tetap performant dan tidak norak.
+
+**Diterapkan di:**
+- Bottom navigation bar
+- Bottom sheet (dialog konfirmasi, filter Rekap)
+- Hero card di Home (opsional, evaluasi setelah dicoba — jangan dipaksakan kalau bikin teks progress bar sulit terbaca)
+
+**Spesifikasi teknis:**
+- `BackdropFilter` dengan `ImageFilter.blur(sigmaX: 20, sigmaY: 20)` di belakang permukaan translucent
+- Permukaan: `surface` dengan opacity ~0.7–0.85 (dark mode) / ~0.75–0.9 (light mode) — bukan solid
+- Border tipis 1px, warna putih ~15-20% opacity (dark mode) atau hitam ~6-8% opacity (light mode), untuk kesan "tepi kaca"
+- Shadow lembut di bawah elemen (bukan shadow tajam) untuk kesan mengambang/depth
+- **Wajib dites kontras teks di atasnya tetap terbaca** — kalau blur+translucent bikin teks sulit dibaca di atas konten yang lewat di baliknya, turunkan opacity permukaan atau batalkan glass effect di elemen itu
+
+### Prinsip Animasi & Transisi (ditambahkan setelah testing awal)
+Perpindahan HARUS terasa halus, bukan potongan instan — ini bagian dari "kualitas polish ala Samsung/Apple" yang sudah ditetapkan sebagai filosofi desain utama.
+- **Perpindahan tab bottom nav**: tambahkan transisi (fade atau fade+slide halus), jangan biarkan default `IndexedStack` yang instan tanpa animasi
+- **Push/pop halaman**: gunakan `PageTransitionsTheme` yang konsisten (bisa custom, tidak harus default Android abrupt transition)
+- **Perubahan state kecil** (toggle, expand accordion FAQ, progress bar terisi, dialog muncul/hilang): gunakan implicit animation widget (`AnimatedContainer`, `AnimatedOpacity`, `AnimatedSize`, dst), jangan perubahan instan
+- Durasi animasi disarankan singkat (150-300ms) — tetap terasa responsif, bukan lambat
+
+### Fleksibilitas Fitur yang Perlu Dipastikan Ada
+Ditemukan dari testing: user harus bisa **menambah kategori sendiri** (bukan cuma pakai 14 kategori default), baik dari:
+1. Layar Kelola Kategori — tombol tambah kategori baru (nama, kind, expense type, icon, warna)
+2. Layar Catat — opsi "+ Tambah kategori" di ujung salah satu grup chip kategori, sebagai shortcut tanpa harus keluar dari alur pencatatan
+
 ### Tipografi — FINAL
 - **Display/heading/angka**: **Sora** (rounded, punya karakter, bawa personality "kaget" tapi tetap rapi)
 - **Body text**: **Inter** (netral, gampang dibaca di ukuran kecil)
