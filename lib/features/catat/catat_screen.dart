@@ -540,6 +540,8 @@ class _CategoryChip extends StatelessWidget {
           )
         : color;
 
+    const duration = Duration(milliseconds: 200);
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -547,7 +549,9 @@ class _CategoryChip extends StatelessWidget {
         width: 68,
         child: Column(
           children: [
-            Container(
+            AnimatedContainer(
+              duration: duration,
+              curve: Curves.easeOut,
               width: 52,
               height: 52,
               decoration: BoxDecoration(
@@ -558,17 +562,24 @@ class _CategoryChip extends StatelessWidget {
                   width: active ? 2 : 1,
                 ),
               ),
-              child: Icon(categoryIcon(category), color: iconColor, size: 20),
+              child: AnimatedSwitcher(
+                duration: duration,
+                child: Icon(categoryIcon(category), color: iconColor, size: 20, key: ValueKey(active)),
+              ),
             ),
             const SizedBox(height: 6),
-            Text(
-              category.name,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall?.copyWith(
+            AnimatedDefaultTextStyle(
+              duration: duration,
+              curve: Curves.easeOut,
+              style: theme.textTheme.labelSmall!.copyWith(
                 color: active ? theme.colorScheme.onSurface : theme.colorScheme.onSurfaceVariant,
                 fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+              ),
+              child: Text(
+                category.name,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -594,10 +605,14 @@ class _TypeTogglePill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    const duration = Duration(milliseconds: 200);
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
-      child: Container(
+      child: AnimatedContainer(
+        duration: duration,
+        curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(vertical: 10),
         alignment: Alignment.center,
         decoration: BoxDecoration(
@@ -605,12 +620,14 @@ class _TypeTogglePill extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: active ? color : theme.colorScheme.outline, width: active ? 2 : 1),
         ),
-        child: Text(
-          label,
-          style: theme.textTheme.bodyMedium?.copyWith(
+        child: AnimatedDefaultTextStyle(
+          duration: duration,
+          curve: Curves.easeOut,
+          style: theme.textTheme.bodyMedium!.copyWith(
             color: active ? color : theme.colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w700,
           ),
+          child: Text(label),
         ),
       ),
     );
