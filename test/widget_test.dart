@@ -22,6 +22,17 @@ import 'package:kirain/features/recurring/data/recurring_transaction_repository.
 import 'package:kirain/features/recurring/presentation/manage_recurring_screen.dart';
 import 'package:kirain/features/transactions/data/transaction_repository.dart';
 
+/// The Catat form got noticeably taller in Fase 3 (mode selector + grouped
+/// category chip rows), tall enough that its trailing "Oke, Catat" button
+/// falls outside the default test surface and never gets built by the
+/// ListView's sliver. Growing the surface avoids scrolling gymnastics.
+void _growTestSurface(WidgetTester tester) {
+  tester.view.physicalSize = const Size(400, 2200);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
+
 void main() {
   testWidgets('sign-in screen shows an email field and submit button', (tester) async {
     await tester.pumpWidget(
@@ -57,6 +68,7 @@ void main() {
         Category(id: 'c2', name: 'Gaji', kind: CategoryKind.income),
       ];
 
+      _growTestSurface(tester);
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -71,13 +83,182 @@ void main() {
       expect(find.text('Oke, Catat'), findsOneWidget);
       expect(find.text('Wajib'), findsNothing);
 
-      await tester.tap(find.byType(DropdownButtonFormField<Category>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Makan & Minum').last);
+      await tester.tap(find.text('Makan & Minum'));
       await tester.pumpAndSettle();
 
       expect(find.text('Wajib'), findsOneWidget);
       expect(find.text('Keinginan'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'catat form groups categories into Wajib/Keinginan/Pemasukan sections with icons',
+    (tester) async {
+      const categories = [
+        Category(
+          id: 'w1',
+          name: 'Makan & Minum',
+          kind: CategoryKind.expense,
+          expenseType: ExpenseType.wajib,
+        ),
+        Category(
+          id: 'k1',
+          name: 'Jajan & Nongkrong',
+          kind: CategoryKind.expense,
+          expenseType: ExpenseType.keinginan,
+        ),
+        Category(id: 'i1', name: 'Gaji', kind: CategoryKind.income),
+      ];
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [categoriesProvider.overrideWith((ref) async => categories)],
+          child: const MaterialApp(home: CatatScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('WAJIB'), findsOneWidget);
+      expect(find.text('KEINGINAN'), findsOneWidget);
+      expect(find.text('PEMASUKAN'), findsOneWidget);
+      expect(find.byIcon(Icons.restaurant_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.local_cafe_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.account_balance_wallet_outlined), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'catat screen switches to Nabung mode and shows a goal picker instead of categories',
+    (tester) async {
+      const categories = [
+        Category(
+          id: 'c1',
+          name: 'Makan & Minum',
+          kind: CategoryKind.expense,
+          expenseType: ExpenseType.wajib,
+        ),
+      ];
+      const goals = [
+        SavingsGoal(
+          id: 'g1',
+          name: 'Dana Darurat',
+          targetAmount: 5000000,
+          currentAmount: 1000000,
+          isEmergencyFund: true,
+          priorityOrder: 0,
+        ),
+      ];
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            categoriesProvider.overrideWith((ref) async => categories),
+            savingsGoalsProvider.overrideWith((ref) async => goals),
+          ],
+          child: const MaterialApp(home: CatatScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Kategori'), findsOneWidget);
+      expect(find.text('Makan & Minum'), findsOneWidget);
+
+      await tester.tap(find.text('Nabung'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Kategori'), findsNothing);
+      expect(find.text('Target Nabung'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'catat form shows an inline riba warning as the note field is typed, and hides it again once removed',
+    (tester) async {
+      const categories = [
+        Category(
+          id: 'c1',
+          name: 'Makan & Minum',
+          kind: CategoryKind.expense,
+          expenseType: ExpenseType.wajib,
+        ),
+      ];
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [categoriesProvider.overrideWith((ref) async => categories)],
+          child: const MaterialApp(home: CatatScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('berbunga (riba)'), findsNothing);
+
+      await tester.enterText(find.widgetWithText(TextFormField, 'Catatan (opsional)'), 'bayar cicilan motor');
+      await tester.pump();
+
+      expect(find.textContaining('berbunga (riba)'), findsOneWidget);
+
+      await tester.enterText(find.widgetWithText(TextFormField, 'Catatan (opsional)'), 'makan siang');
+      await tester.pump();
+
+      expect(find.textContaining('berbunga (riba)'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'catat form lets the wajib/keinginan toggle be overridden manually, driving the checkout warning',
+    (tester) async {
+      const wajibCategory = Category(
+        id: 'w1',
+        name: 'Makan & Minum',
+        kind: CategoryKind.expense,
+        expenseType: ExpenseType.wajib,
+        budgetLimit: 1000000,
+      );
+
+      final summary = DashboardSummary(
+        wajib: const BudgetGroupSummary(
+          items: [CategorySpend(category: wajibCategory, spent: 500000, effectiveLimit: 1000000, rollover: 0)],
+          totalSpent: 500000,
+          totalLimit: 1000000,
+          previousTotalSpent: 0,
+        ),
+        keinginan: const BudgetGroupSummary(items: [], totalSpent: 0, totalLimit: 0, previousTotalSpent: 0),
+      );
+
+      _growTestSurface(tester);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            categoriesProvider.overrideWith((ref) async => const [wajibCategory]),
+            dashboardSummaryProvider.overrideWith((ref) async => summary),
+          ],
+          child: const MaterialApp(home: CatatScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.widgetWithText(TextFormField, 'Jumlah (Rp)'), '20000');
+      await tester.tap(find.text('Makan & Minum'));
+      await tester.pumpAndSettle();
+
+      // Category defaults to Wajib; override it to Keinginan manually.
+      await tester.tap(find.text('Keinginan'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Oke, Catat'));
+      await tester.pumpAndSettle();
+
+      // The soft checkout warning only fires for Keinginan while Wajib isn't
+      // fully covered — its appearance here proves the override took effect
+      // (this category's own default is Wajib, which wouldn't trigger it).
+      expect(find.text('Eh tunggu dulu'), findsOneWidget);
+      expect(find.textContaining('masih 50%'), findsOneWidget);
+
+      await tester.tap(find.text('Cek lagi'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Eh tunggu dulu'), findsNothing);
     },
   );
 
