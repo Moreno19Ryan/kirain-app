@@ -8,6 +8,7 @@ import '../../core/widgets/skeleton_box.dart';
 import '../categories/data/category.dart';
 import '../categories/data/category_icons.dart';
 import '../categories/data/category_repository.dart';
+import '../categories/presentation/category_form_dialog.dart';
 import '../goals/data/savings_goal.dart';
 import '../goals/data/savings_goal_repository.dart';
 import '../home/data/dashboard_summary.dart';
@@ -60,6 +61,14 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
       _selectedCategory = category;
       _expenseType = category.expenseType;
     });
+  }
+
+  /// "+ Tambah kategori" shortcut per CLAUDE.md 6.5 — same dialog Kelola
+  /// Kategori uses, but without leaving the recording flow. Selects the new
+  /// category right away so the user can keep going.
+  Future<void> _onAddCategory() async {
+    final created = await showCategoryFormDialog(context, ref);
+    if (created != null) _onCategorySelected(created);
   }
 
   Future<void> _submit() async {
@@ -384,6 +393,12 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
               color: neutral,
               selected: _selectedCategory,
               onSelected: _onCategorySelected,
+              // Shortcut per CLAUDE.md 6.5 — lives on this section rather
+              // than all three so it doesn't repeat, and this one's
+              // guaranteed to render (see showAddButton) even for a
+              // brand-new account with no income categories yet.
+              showAddButton: true,
+              onAddCategory: _onAddCategory,
             ),
             if (_selectedCategory?.kind == CategoryKind.expense) ...[
               const SizedBox(height: 4),
@@ -466,6 +481,8 @@ class _CategorySection extends StatelessWidget {
     required this.color,
     required this.selected,
     required this.onSelected,
+    this.showAddButton = false,
+    this.onAddCategory,
   });
 
   final String title;
@@ -474,10 +491,18 @@ class _CategorySection extends StatelessWidget {
   final Category? selected;
   final ValueChanged<Category> onSelected;
 
+  /// Renders a trailing "+ Tambah kategori" chip and keeps this section
+  /// visible even when [categories] is empty, so a brand-new account
+  /// (nothing in this group yet) still has a guaranteed way to add one —
+  /// unlike the other sections, which auto-collapse when empty.
+  final bool showAddButton;
+  final VoidCallback? onAddCategory;
+
   @override
   Widget build(BuildContext context) {
-    if (categories.isEmpty) return const SizedBox.shrink();
+    if (categories.isEmpty && !showAddButton) return const SizedBox.shrink();
     final theme = Theme.of(context);
+    final itemCount = categories.length + (showAddButton ? 1 : 0);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -496,9 +521,12 @@ class _CategorySection extends StatelessWidget {
             height: 92,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: categories.length,
+              itemCount: itemCount,
               separatorBuilder: (_, _) => const SizedBox(width: 10),
               itemBuilder: (context, index) {
+                if (index >= categories.length) {
+                  return _AddCategoryChip(onTap: onAddCategory!);
+                }
                 final category = categories[index];
                 return _CategoryChip(
                   category: category,
@@ -510,6 +538,48 @@ class _CategorySection extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// "+ Tambah kategori" — same footprint as [_CategoryChip] so it reads as
+/// part of the row, not a bolted-on extra.
+class _AddCategoryChip extends StatelessWidget {
+  const _AddCategoryChip({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        width: 68,
+        child: Column(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: theme.colorScheme.outline),
+              ),
+              child: Icon(Icons.add, color: theme.colorScheme.onSurfaceVariant, size: 22),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Tambah',
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
       ),
     );
   }
