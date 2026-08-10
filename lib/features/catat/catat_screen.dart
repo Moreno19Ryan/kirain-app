@@ -194,6 +194,7 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
   Future<bool?> _showCheckoutWarning(double wajibRatio) {
     final theme = Theme.of(context);
     final coral = theme.extension<KirainColors>()?.coral ?? theme.colorScheme.secondary;
+    final coralStrong = theme.extension<KirainColors>()?.coralStrong ?? theme.colorScheme.onSecondaryContainer;
     final pct = (wajibRatio * 100).round();
 
     return showModalBottomSheet<bool>(
@@ -226,7 +227,7 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
                       color: coral.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(Icons.warning_amber_rounded, color: coral, size: 20),
+                    child: Icon(Icons.warning_amber_rounded, color: coralStrong, size: 20),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -332,6 +333,8 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
     final kirainColors = theme.extension<KirainColors>();
     final mint = kirainColors?.mint ?? theme.colorScheme.primary;
     final coral = kirainColors?.coral ?? theme.colorScheme.secondary;
+    final mintStrong = kirainColors?.mintStrong ?? theme.colorScheme.onPrimaryContainer;
+    final coralStrong = kirainColors?.coralStrong ?? theme.colorScheme.onSecondaryContainer;
     final neutral = theme.colorScheme.onSurfaceVariant;
 
     return Form(
@@ -368,6 +371,7 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
               title: 'Wajib',
               categories: wajibCategories,
               color: mint,
+              strongColor: mintStrong,
               selected: _selectedCategory,
               onSelected: _onCategorySelected,
             ),
@@ -375,6 +379,7 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
               title: 'Keinginan',
               categories: keinginanCategories,
               color: coral,
+              strongColor: coralStrong,
               selected: _selectedCategory,
               onSelected: _onCategorySelected,
             ),
@@ -382,6 +387,7 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
               title: 'Pemasukan',
               categories: incomeCategories,
               color: neutral,
+              strongColor: neutral,
               selected: _selectedCategory,
               onSelected: _onCategorySelected,
             ),
@@ -398,6 +404,7 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
                     child: _TypeTogglePill(
                       label: 'Wajib',
                       color: mint,
+                      strongColor: mintStrong,
                       active: _expenseType == ExpenseType.wajib,
                       onTap: () => setState(() => _expenseType = ExpenseType.wajib),
                     ),
@@ -407,6 +414,7 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
                     child: _TypeTogglePill(
                       label: 'Keinginan',
                       color: coral,
+                      strongColor: coralStrong,
                       active: _expenseType == ExpenseType.keinginan,
                       onTap: () => setState(() => _expenseType = ExpenseType.keinginan),
                     ),
@@ -433,7 +441,7 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
           ),
           if (_mode == _CatatMode.transaksi && looksLikeRiba(_noteController.text)) ...[
             const SizedBox(height: 12),
-            _RibaBanner(coral: coral),
+            _RibaBanner(coral: coral, coralStrong: coralStrong),
           ],
           if (_errorMessage != null) ...[
             const SizedBox(height: 12),
@@ -464,6 +472,7 @@ class _CategorySection extends StatelessWidget {
     required this.title,
     required this.categories,
     required this.color,
+    required this.strongColor,
     required this.selected,
     required this.onSelected,
   });
@@ -471,6 +480,9 @@ class _CategorySection extends StatelessWidget {
   final String title;
   final List<Category> categories;
   final Color color;
+
+  /// Used for the inactive chip's icon — see [_CategoryChip].
+  final Color strongColor;
   final Category? selected;
   final ValueChanged<Category> onSelected;
 
@@ -503,6 +515,7 @@ class _CategorySection extends StatelessWidget {
                 return _CategoryChip(
                   category: category,
                   color: color,
+                  strongColor: strongColor,
                   active: selected?.id == category.id,
                   onTap: () => onSelected(category),
                 );
@@ -519,12 +532,19 @@ class _CategoryChip extends StatelessWidget {
   const _CategoryChip({
     required this.category,
     required this.color,
+    required this.strongColor,
     required this.active,
     required this.onTap,
   });
 
   final Category category;
   final Color color;
+
+  /// Icon color while inactive — [color] itself is a bright fill tone, which
+  /// on the near-transparent inactive background (`color` at 12% alpha) is
+  /// exactly the low-contrast "mint-on-pale-mint" case CLAUDE.md's fill-vs-
+  /// strong principle warns about, so this needs the darker strong variant.
+  final Color strongColor;
   final bool active;
   final VoidCallback onTap;
 
@@ -534,11 +554,11 @@ class _CategoryChip extends StatelessWidget {
     final iconColor = active
         ? categoryIconColor(
             category: category,
-            mint: theme.colorScheme.onPrimary,
-            coral: theme.colorScheme.onSecondary,
+            mintStrong: theme.colorScheme.onPrimary,
+            coralStrong: theme.colorScheme.onSecondary,
             neutral: theme.colorScheme.onSurface,
           )
-        : color;
+        : strongColor;
 
     return InkWell(
       onTap: onTap,
@@ -582,12 +602,18 @@ class _TypeTogglePill extends StatelessWidget {
   const _TypeTogglePill({
     required this.label,
     required this.color,
+    required this.strongColor,
     required this.active,
     required this.onTap,
   });
 
   final String label;
   final Color color;
+
+  /// Used for the label text when active — [color] alone reads too pale as
+  /// text on the light tint background (same fill-vs-strong issue as
+  /// [_CategoryChip]).
+  final Color strongColor;
   final bool active;
   final VoidCallback onTap;
 
@@ -608,7 +634,7 @@ class _TypeTogglePill extends StatelessWidget {
         child: Text(
           label,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: active ? color : theme.colorScheme.onSurfaceVariant,
+            color: active ? strongColor : theme.colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -620,9 +646,10 @@ class _TypeTogglePill extends StatelessWidget {
 /// Inline, non-blocking — replaces the old submit-time dialog so the notice
 /// shows up live as the user types instead of gating the save.
 class _RibaBanner extends StatelessWidget {
-  const _RibaBanner({required this.coral});
+  const _RibaBanner({required this.coral, required this.coralStrong});
 
   final Color coral;
+  final Color coralStrong;
 
   @override
   Widget build(BuildContext context) {
@@ -637,7 +664,7 @@ class _RibaBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.warning_amber_rounded, size: 18, color: coral),
+          Icon(Icons.warning_amber_rounded, size: 18, color: coralStrong),
           const SizedBox(width: 10),
           Expanded(
             child: Text(

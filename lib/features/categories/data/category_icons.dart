@@ -41,15 +41,22 @@ IconData categoryIcon(Category category) {
 /// CLAUDE.md 6.5's "Kategori Wajib default pakai warna mint, Keinginan
 /// default pakai warna coral". Callers pass in the current theme's tokens so
 /// this stays mode-aware without importing Theme directly here.
+///
+/// Takes the **-strong** variants deliberately, not the raw fill tokens —
+/// this paints an icon glyph directly (not inside a solid fill), which is
+/// exactly the "teks atau icon langsung" case CLAUDE.md's fill-vs-strong
+/// principle calls out. Passing the raw fill color here was the bug behind
+/// "icon kategori Wajib nyaris gak keliatan" on a light background — mint
+/// fill (`#7FE0C4`) on a pale mint-tinted chip is barely any contrast at all.
 Color categoryIconColor({
   required Category category,
-  required Color mint,
-  required Color coral,
+  required Color mintStrong,
+  required Color coralStrong,
   required Color neutral,
 }) {
   return switch (category.expenseType) {
-    ExpenseType.wajib => mint,
-    ExpenseType.keinginan => coral,
+    ExpenseType.wajib => mintStrong,
+    ExpenseType.keinginan => coralStrong,
     null => neutral,
   };
 }

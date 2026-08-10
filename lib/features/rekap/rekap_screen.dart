@@ -394,8 +394,8 @@ class _TransactionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final kirainColors = theme.extension<KirainColors>();
-    final mint = kirainColors?.mint ?? theme.colorScheme.primary;
-    final coral = kirainColors?.coral ?? theme.colorScheme.secondary;
+    final mintStrong = kirainColors?.mintStrong ?? theme.colorScheme.onPrimaryContainer;
+    final coralStrong = kirainColors?.coralStrong ?? theme.colorScheme.onSecondaryContainer;
     final neutral = theme.colorScheme.onSurfaceVariant;
 
     final IconData icon;
@@ -405,14 +405,19 @@ class _TransactionCard extends StatelessWidget {
       iconColor = neutral;
     } else if (category != null) {
       icon = categoryIcon(category!);
-      iconColor = categoryIconColor(category: category!, mint: mint, coral: coral, neutral: neutral);
+      iconColor = categoryIconColor(
+        category: category!,
+        mintStrong: mintStrong,
+        coralStrong: coralStrong,
+        neutral: neutral,
+      );
     } else {
       icon = Icons.receipt_long_outlined;
       iconColor = neutral;
     }
 
     final sign = item.isIncome ? '+' : '-';
-    final amountColor = item.isIncome ? mint : theme.colorScheme.onSurface;
+    final amountColor = item.isIncome ? mintStrong : theme.colorScheme.onSurface;
 
     return Card(
       margin: EdgeInsets.zero,
@@ -523,7 +528,7 @@ class _PeriodComparisonCard extends StatelessWidget {
     if (change == null) return null;
 
     final theme = Theme.of(context);
-    final mint = theme.extension<KirainColors>()?.mint ?? theme.colorScheme.primary;
+    final mintStrong = theme.extension<KirainColors>()?.mintStrong ?? theme.colorScheme.onPrimaryContainer;
     final rounded = change.abs().round();
 
     final IconData icon;
@@ -543,7 +548,7 @@ class _PeriodComparisonCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Icon(icon, size: 15, color: mint),
+          Icon(icon, size: 15, color: mintStrong),
           const SizedBox(width: 8),
           Expanded(
             child: Text.rich(
@@ -551,7 +556,7 @@ class _PeriodComparisonCard extends StatelessWidget {
                 style: theme.textTheme.bodySmall,
                 children: [
                   TextSpan(text: 'Pengeluaran $label kamu '),
-                  TextSpan(text: phrase, style: TextStyle(color: mint, fontWeight: FontWeight.w700)),
+                  TextSpan(text: phrase, style: TextStyle(color: mintStrong, fontWeight: FontWeight.w700)),
                   const TextSpan(text: ' dari bulan lalu'),
                 ],
               ),
