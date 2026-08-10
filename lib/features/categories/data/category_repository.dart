@@ -26,23 +26,31 @@ class CategoryRepository {
     return _client.from('categories').update({'budget_limit': limit}).eq('id', categoryId);
   }
 
-  Future<void> createCategory({
+  /// Returns the newly created row (not just void) so callers like Catat's
+  /// inline "+ Tambah kategori" shortcut can immediately select it without
+  /// waiting on a full [categoriesProvider] refetch.
+  Future<Category> createCategory({
     required String name,
     required CategoryKind kind,
     ExpenseType? expenseType,
     num? budgetLimit,
     int alertThresholdPct = 80,
-  }) {
+  }) async {
     final userId = _client.auth.currentUser!.id;
 
-    return _client.from('categories').insert({
-      'user_id': userId,
-      'name': name,
-      'kind': kind.name,
-      'expense_type': expenseType?.name,
-      'budget_limit': budgetLimit,
-      'alert_threshold_pct': alertThresholdPct,
-    });
+    final row = await _client
+        .from('categories')
+        .insert({
+          'user_id': userId,
+          'name': name,
+          'kind': kind.name,
+          'expense_type': expenseType?.name,
+          'budget_limit': budgetLimit,
+          'alert_threshold_pct': alertThresholdPct,
+        })
+        .select()
+        .single();
+    return Category.fromJson(row);
   }
 
   Future<void> updateCategory({

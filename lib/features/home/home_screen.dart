@@ -149,6 +149,8 @@ class _HeroCard extends StatelessWidget {
     final kirainColors = theme.extension<KirainColors>();
     final mint = kirainColors?.mint ?? theme.colorScheme.primary;
     final coral = kirainColors?.coral ?? theme.colorScheme.secondary;
+    final mintStrong = kirainColors?.mintStrong ?? theme.colorScheme.onPrimaryContainer;
+    final coralStrong = kirainColors?.coralStrong ?? theme.colorScheme.onSecondaryContainer;
     final textDim = theme.colorScheme.onSurfaceVariant;
     // AppTheme (Fase 2) deliberately maps colorScheme.surface to the `bg`
     // token (not the card `surface` token) so the hero's progress-bar track
@@ -173,24 +175,24 @@ class _HeroCard extends StatelessWidget {
       title = 'Belum Ada Limit';
       titleColor = textDim;
       description = 'Yuk atur limit budget wajib biar KIRAIN bisa mulai mantau progress kamu.';
-      leftEyebrow = mint;
-      rightEyebrow = coral;
+      leftEyebrow = mintStrong;
+      rightEyebrow = coralStrong;
       steepEyebrows = false;
     } else if (isOver) {
       overline = 'Zona Kamu Sekarang';
       title = 'Zona Kirain';
-      titleColor = coral;
+      titleColor = coralStrong;
       description = 'Bulan ini kebablasan nih, gapapa. Yuk kita rapiin lagi bulan depan 💪';
-      leftEyebrow = coral;
-      rightEyebrow = coral;
+      leftEyebrow = coralStrong;
+      rightEyebrow = coralStrong;
       steepEyebrows = true;
     } else {
       overline = 'Zona Kamu Sekarang';
       title = 'Zona Aman';
-      titleColor = mint;
+      titleColor = mintStrong;
       description = 'Kebutuhan wajib kamu masih terkendali bulan ini.';
-      leftEyebrow = mint;
-      rightEyebrow = coral;
+      leftEyebrow = mintStrong;
+      rightEyebrow = coralStrong;
       steepEyebrows = false;
     }
 
@@ -249,7 +251,7 @@ class _HeroCard extends StatelessWidget {
                       group: wajib,
                       trackColor: bg,
                       barColor: isOver ? coral : mint,
-                      percentColor: isOver ? coral : textDim,
+                      percentColor: isOver ? coralStrong : textDim,
                       percentBold: isOver,
                     ),
                   ),
@@ -444,8 +446,8 @@ class _CategoryTile extends ConsumerWidget {
     final kirainColors = theme.extension<KirainColors>();
     final iconColor = categoryIconColor(
       category: item.category,
-      mint: kirainColors?.mint ?? theme.colorScheme.primary,
-      coral: kirainColors?.coral ?? theme.colorScheme.secondary,
+      mintStrong: kirainColors?.mintStrong ?? theme.colorScheme.onPrimaryContainer,
+      coralStrong: kirainColors?.coralStrong ?? theme.colorScheme.onSecondaryContainer,
       neutral: theme.colorScheme.onSurfaceVariant,
     );
 

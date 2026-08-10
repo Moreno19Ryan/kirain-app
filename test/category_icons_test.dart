@@ -52,11 +52,11 @@ void main() {
   });
 
   group('categoryIconColor', () {
-    const mint = Color(0xFF7FE0C4);
-    const coral = Color(0xFFFF8B5E);
+    const mintStrong = Color(0xFF12946E);
+    const coralStrong = Color(0xFFE2613A);
     const neutral = Color(0xFF8FA39A);
 
-    test('wajib gets mint, keinginan gets coral, income gets neutral', () {
+    test('wajib gets mintStrong, keinginan gets coralStrong, income gets neutral', () {
       const wajib = Category(
         id: 'c1',
         name: 'Makan & Minum',
@@ -71,13 +71,16 @@ void main() {
       );
       const income = Category(id: 'c3', name: 'Gaji', kind: CategoryKind.income);
 
-      expect(categoryIconColor(category: wajib, mint: mint, coral: coral, neutral: neutral), mint);
       expect(
-        categoryIconColor(category: keinginan, mint: mint, coral: coral, neutral: neutral),
-        coral,
+        categoryIconColor(category: wajib, mintStrong: mintStrong, coralStrong: coralStrong, neutral: neutral),
+        mintStrong,
       );
       expect(
-        categoryIconColor(category: income, mint: mint, coral: coral, neutral: neutral),
+        categoryIconColor(category: keinginan, mintStrong: mintStrong, coralStrong: coralStrong, neutral: neutral),
+        coralStrong,
+      );
+      expect(
+        categoryIconColor(category: income, mintStrong: mintStrong, coralStrong: coralStrong, neutral: neutral),
         neutral,
       );
     });
