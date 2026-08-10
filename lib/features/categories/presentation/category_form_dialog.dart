@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/category.dart';
 import '../data/category_repository.dart';
+import '../data/category_style_options.dart';
 
 /// Shared "Kategori Baru"/"Edit Kategori" dialog — used by
 /// ManageCategoriesScreen and Catat's inline "+ Tambah kategori" shortcut
@@ -26,6 +27,8 @@ Future<Category?> showCategoryFormDialog(
   var kind = existing?.kind ?? CategoryKind.expense;
   var expenseType = existing?.expenseType ?? ExpenseType.keinginan;
   var alertThresholdPct = existing?.alertThresholdPct ?? 80;
+  var icon = existing?.icon;
+  var color = existing?.color;
 
   final saved = await showDialog<bool>(
     context: context,
@@ -87,6 +90,20 @@ Future<Category?> showCategoryFormDialog(
                           setDialogState(() => alertThresholdPct = value.round()),
                     ),
                   ],
+                  const SizedBox(height: 12),
+                  Text('Icon (opsional)', style: Theme.of(dialogContext).textTheme.labelMedium),
+                  const SizedBox(height: 8),
+                  _IconPicker(
+                    selected: icon,
+                    onSelected: (key) => setDialogState(() => icon = key),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Warna (opsional)', style: Theme.of(dialogContext).textTheme.labelMedium),
+                  const SizedBox(height: 8),
+                  _ColorPicker(
+                    selected: color,
+                    onSelected: (key) => setDialogState(() => color = key),
+                  ),
                 ],
               ),
             ),
@@ -122,6 +139,8 @@ Future<Category?> showCategoryFormDialog(
       expenseType: kind == CategoryKind.expense ? expenseType : null,
       budgetLimit: kind == CategoryKind.expense ? limit : null,
       alertThresholdPct: alertThresholdPct,
+      icon: icon,
+      color: color,
     );
   } else {
     await repository.updateCategory(
@@ -130,9 +149,128 @@ Future<Category?> showCategoryFormDialog(
       expenseType: existing.kind == CategoryKind.expense ? expenseType : null,
       budgetLimit: existing.kind == CategoryKind.expense ? limit : null,
       alertThresholdPct: alertThresholdPct,
+      icon: icon,
+      color: color,
     );
   }
 
   ref.invalidate(categoriesProvider);
   return created;
+}
+
+/// Grid of curated icon choices (see category_style_options.dart) plus a
+/// leading "Bawaan" option that clears back to null — i.e. the category
+/// falls back to [categoryIcon]'s existing name/kind-based default.
+class _IconPicker extends StatelessWidget {
+  const _IconPicker({required this.selected, required this.onSelected});
+
+  final String? selected;
+  final ValueChanged<String?> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        Tooltip(
+          message: 'Pakai bawaan',
+          child: _OptionCircle(
+            selected: selected == null,
+            onTap: () => onSelected(null),
+            child: Icon(Icons.auto_awesome_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ),
+        for (final option in kCategoryIconOptions)
+          Tooltip(
+            message: option.label,
+            child: _OptionCircle(
+              selected: selected == option.key,
+              onTap: () => onSelected(option.key),
+              child: Icon(option.icon, size: 18, color: theme.colorScheme.onSurface),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Row of preset color swatches (see category_style_options.dart) plus a
+/// leading "Bawaan" option that clears back to null — i.e. the category
+/// falls back to the Wajib/Keinginan/Pemasukan group's default mint/coral/
+/// neutral tone.
+class _ColorPicker extends StatelessWidget {
+  const _ColorPicker({required this.selected, required this.onSelected});
+
+  final String? selected;
+  final ValueChanged<String?> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        Tooltip(
+          message: 'Pakai bawaan',
+          child: _OptionCircle(
+            selected: selected == null,
+            onTap: () => onSelected(null),
+            border: Border.all(color: theme.colorScheme.outline, width: 1.5),
+            child: Icon(Icons.close, size: 16, color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ),
+        for (final option in kCategoryColorOptions)
+          Tooltip(
+            message: option.label,
+            child: _OptionCircle(
+              selected: selected == option.key,
+              onTap: () => onSelected(option.key),
+              fillColor: option.fill,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Shared 40x40 selectable circle for both pickers — [selected] draws a
+/// highlighted ring so the current pick is obvious without extra text.
+class _OptionCircle extends StatelessWidget {
+  const _OptionCircle({required this.selected, required this.onTap, this.child, this.fillColor, this.border});
+
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget? child;
+  final Color? fillColor;
+  final BoxBorder? border;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: fillColor ?? theme.colorScheme.surfaceContainerHighest,
+          border: border ?? Border.all(color: theme.colorScheme.outline, width: 1),
+        ),
+        foregroundDecoration: selected
+            ? BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: theme.colorScheme.primary, width: 2.5),
+              )
+            : null,
+        child: child,
+      ),
+    );
+  }
 }

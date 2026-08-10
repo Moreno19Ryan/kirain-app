@@ -10,6 +10,8 @@ class Category {
     this.expenseType,
     this.budgetLimit,
     this.alertThresholdPct = 80,
+    this.icon,
+    this.color,
   });
 
   final String id;
@@ -24,6 +26,15 @@ class Category {
   /// on Home — defaults to 80 per CLAUDE.md, customizable per category.
   final int alertThresholdPct;
 
+  /// Curated icon key from [kCategoryIconOptionsByKey] (category_style_options.dart),
+  /// null for the 14 default categories, which keep using [categoryIcon]'s
+  /// name/kind-based mapping — CLAUDE.md "Kustomisasi Icon & Warna Kategori".
+  final String? icon;
+
+  /// Curated preset hex from [kCategoryColorOptionsByKey], same null-means-
+  /// default rule as [icon].
+  final String? color;
+
   factory Category.fromJson(Map<String, dynamic> json) {
     return Category(
       id: json['id'] as String,
@@ -36,6 +47,8 @@ class Category {
       },
       budgetLimit: json['budget_limit'] as num?,
       alertThresholdPct: json['alert_threshold_pct'] as int? ?? 80,
+      icon: json['icon'] as String?,
+      color: json['color'] as String?,
     );
   }
 }

@@ -303,6 +303,34 @@ void main() {
     },
   );
 
+  testWidgets(
+    'catat form lets a new category pick a curated icon and color, saved on the row',
+    (tester) async {
+      final fakeRepo = _FakeCategoryRepository([]);
+
+      _growTestSurface(tester);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [categoryRepositoryProvider.overrideWithValue(fakeRepo)],
+          child: const MaterialApp(home: CatatScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Tambah'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.widgetWithText(TextField, 'Nama kategori'), 'Peliharaan');
+      await tester.tap(find.byTooltip('Hewan Peliharaan'));
+      await tester.tap(find.byTooltip('Netral'));
+      await tester.tap(find.text('Simpan'));
+      await tester.pumpAndSettle();
+
+      expect(fakeRepo.categories.last.icon, 'pets');
+      expect(fakeRepo.categories.last.color, '#A9B7C4');
+    },
+  );
+
   testWidgets('home dashboard flags Zona Kirain when spending is over the limit', (
     tester,
   ) async {
@@ -763,6 +791,8 @@ class _FakeCategoryRepository extends CategoryRepository {
     ExpenseType? expenseType,
     num? budgetLimit,
     int alertThresholdPct = 80,
+    String? icon,
+    String? color,
   }) async {
     final created = Category(
       id: 'new-${categories.length}',
@@ -771,6 +801,8 @@ class _FakeCategoryRepository extends CategoryRepository {
       expenseType: expenseType,
       budgetLimit: budgetLimit,
       alertThresholdPct: alertThresholdPct,
+      icon: icon,
+      color: color,
     );
     categories.add(created);
     return created;

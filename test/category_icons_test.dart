@@ -72,17 +72,79 @@ void main() {
       const income = Category(id: 'c3', name: 'Gaji', kind: CategoryKind.income);
 
       expect(
-        categoryIconColor(category: wajib, mintStrong: mintStrong, coralStrong: coralStrong, neutral: neutral),
+        categoryIconColor(
+          category: wajib,
+          mintStrong: mintStrong,
+          coralStrong: coralStrong,
+          neutral: neutral,
+          brightness: Brightness.light,
+        ),
         mintStrong,
       );
       expect(
-        categoryIconColor(category: keinginan, mintStrong: mintStrong, coralStrong: coralStrong, neutral: neutral),
+        categoryIconColor(
+          category: keinginan,
+          mintStrong: mintStrong,
+          coralStrong: coralStrong,
+          neutral: neutral,
+          brightness: Brightness.light,
+        ),
         coralStrong,
       );
       expect(
-        categoryIconColor(category: income, mintStrong: mintStrong, coralStrong: coralStrong, neutral: neutral),
+        categoryIconColor(
+          category: income,
+          mintStrong: mintStrong,
+          coralStrong: coralStrong,
+          neutral: neutral,
+          brightness: Brightness.light,
+        ),
         neutral,
       );
+    });
+
+    test('a custom preset color overrides the expense-type default, mode-aware', () {
+      const custom = Category(
+        id: 'c4',
+        name: 'Custom',
+        kind: CategoryKind.expense,
+        expenseType: ExpenseType.wajib,
+        color: '#7EB8E8', // Langit preset from category_style_options.dart
+      );
+
+      expect(
+        categoryIconColor(
+          category: custom,
+          mintStrong: mintStrong,
+          coralStrong: coralStrong,
+          neutral: neutral,
+          brightness: Brightness.light,
+        ),
+        const Color(0xFF1D5C96),
+      );
+      expect(
+        categoryIconColor(
+          category: custom,
+          mintStrong: mintStrong,
+          coralStrong: coralStrong,
+          neutral: neutral,
+          brightness: Brightness.dark,
+        ),
+        const Color(0xFF7EB8E8),
+      );
+    });
+  });
+
+  group('categoryIcon with a custom icon key', () {
+    test('a curated icon key overrides the name/kind-based default', () {
+      const custom = Category(
+        id: 'c5',
+        name: 'Custom Wajib Category',
+        kind: CategoryKind.expense,
+        expenseType: ExpenseType.wajib,
+        icon: 'pets',
+      );
+      expect(categoryIcon(custom), Icons.pets_outlined);
     });
   });
 }

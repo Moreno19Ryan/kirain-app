@@ -449,6 +449,7 @@ class _CategoryTile extends ConsumerWidget {
       mintStrong: kirainColors?.mintStrong ?? theme.colorScheme.onPrimaryContainer,
       coralStrong: kirainColors?.coralStrong ?? theme.colorScheme.onSecondaryContainer,
       neutral: theme.colorScheme.onSurfaceVariant,
+      brightness: theme.brightness,
     );
 
     return ListTile(
