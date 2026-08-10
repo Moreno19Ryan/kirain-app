@@ -62,6 +62,13 @@ class TransactionHistoryItem {
 
   bool get isSavingsContribution => goalId != null;
 
+  /// Only expense categories ever get an [expenseType] written (see
+  /// [TransactionRepository.addTransaction] / Catat's submit flow) — so a
+  /// category-linked transaction with no expense type reliably means the
+  /// category itself is an income one, without needing to cross-reference
+  /// the categories list.
+  bool get isIncome => categoryId != null && expenseType == null;
+
   String get displayName => categoryName ?? goalName ?? '-';
 
   factory TransactionHistoryItem.fromJson(Map<String, dynamic> json) {

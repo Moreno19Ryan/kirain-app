@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/kirain_colors.dart';
 import '../../core/utils/format.dart';
 import '../categories/data/category.dart';
+import '../categories/data/category_icons.dart';
 import '../categories/data/category_repository.dart';
+import '../home/data/dashboard_summary.dart';
 import '../transactions/data/transaction_repository.dart';
 import 'data/csv_export.dart';
 
@@ -121,20 +124,95 @@ class _RekapScreenState extends ConsumerState<RekapScreen> {
 
   void _applyFilters() => _loadMore(reset: true);
 
-  void _resetFilters() {
-    setState(() {
-      _categoryFilter = null;
-      _dateFilter = null;
-      _search = '';
-      _searchController.clear();
-    });
+  void _clearCategoryFilter() {
+    setState(() => _categoryFilter = null);
     _applyFilters();
+  }
+
+  void _clearDateFilter() {
+    setState(() => _dateFilter = null);
+    _applyFilters();
+  }
+
+  Future<void> _openFilterSheet(List<Category> categories) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
+          ),
+          child: StatefulBuilder(
+            builder: (sheetContext, setSheetState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Filter', style: Theme.of(sheetContext).textTheme.titleMedium),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<Category?>(
+                    initialValue: _categoryFilter,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Kategori',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('Semua kategori')),
+                      ...categories.map((c) => DropdownMenuItem(value: c, child: Text(c.name))),
+                    ],
+                    onChanged: (value) {
+                      setSheetState(() => _categoryFilter = value);
+                      setState(() {});
+                      _applyFilters();
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final range = await showDateRangePicker(
+                        context: sheetContext,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                        initialDateRange: _dateFilter,
+                      );
+                      if (range == null) return;
+                      setSheetState(() => _dateFilter = range);
+                      setState(() {});
+                      _applyFilters();
+                    },
+                    icon: const Icon(Icons.date_range_outlined),
+                    label: Text(
+                      _dateFilter == null
+                          ? 'Pilih rentang tanggal'
+                          : '${formatDate(_dateFilter!.start)} - ${formatDate(_dateFilter!.end)}',
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    child: const Text('Selesai'),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final categoriesAsync = ref.watch(categoriesProvider);
-    final hasActiveFilter = _categoryFilter != null || _dateFilter != null || _search.isNotEmpty;
+    final categories = categoriesAsync.maybeWhen(data: (c) => c, orElse: () => const <Category>[]);
+    final categoryById = {for (final c in categories) c.id: c};
+    final summaryAsync = ref.watch(dashboardSummaryProvider);
+    final hasActiveFilter = _categoryFilter != null || _dateFilter != null;
 
     return Scaffold(
       appBar: AppBar(
@@ -158,78 +236,59 @@ class _RekapScreenState extends ConsumerState<RekapScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextField(
-                  controller: _searchController,
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: 'Cari catatan...',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  onSubmitted: (value) {
-                    _search = value.trim();
-                    _applyFilters();
-                  },
-                ),
-                const SizedBox(height: 8),
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: categoriesAsync.maybeWhen(
-                        data: (categories) => DropdownButtonFormField<Category?>(
-                          initialValue: _categoryFilter,
-                          isExpanded: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Kategori',
-                            isDense: true,
-                            border: OutlineInputBorder(),
-                          ),
-                          items: [
-                            const DropdownMenuItem(value: null, child: Text('Semua kategori')),
-                            ...categories.map(
-                              (c) => DropdownMenuItem(value: c, child: Text(c.name)),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            setState(() => _categoryFilter = value);
-                            _applyFilters();
-                          },
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search),
+                          hintText: 'Cari transaksi...',
+                          border: OutlineInputBorder(),
+                          isDense: true,
                         ),
-                        orElse: () => const SizedBox.shrink(),
+                        onSubmitted: (value) {
+                          _search = value.trim();
+                          _applyFilters();
+                        },
                       ),
                     ),
                     const SizedBox(width: 8),
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        final range = await showDateRangePicker(
-                          context: context,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime.now(),
-                          initialDateRange: _dateFilter,
-                        );
-                        if (range == null) return;
-                        setState(() => _dateFilter = range);
-                        _applyFilters();
-                      },
-                      icon: const Icon(Icons.date_range_outlined),
-                      label: Text(
-                        _dateFilter == null
-                            ? 'Tanggal'
-                            : '${formatDate(_dateFilter!.start)} - ${formatDate(_dateFilter!.end)}',
-                      ),
+                    IconButton.outlined(
+                      onPressed: () => _openFilterSheet(categories),
+                      icon: const Icon(Icons.tune),
+                      tooltip: 'Filter',
                     ),
                   ],
                 ),
-                if (hasActiveFilter)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton(
-                      onPressed: _resetFilters,
-                      child: const Text('Reset filter'),
-                    ),
+                if (hasActiveFilter) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      if (_categoryFilter != null)
+                        InputChip(
+                          label: Text('Kategori: ${_categoryFilter!.name}'),
+                          onDeleted: _clearCategoryFilter,
+                        ),
+                      if (_dateFilter != null)
+                        InputChip(
+                          label: Text(
+                            '${formatDate(_dateFilter!.start)} - ${formatDate(_dateFilter!.end)}',
+                          ),
+                          onDeleted: _clearDateFilter,
+                        ),
+                    ],
                   ),
+                ],
+                const SizedBox(height: 8),
+                summaryAsync.maybeWhen(
+                  data: (summary) => _PeriodComparisonCard(summary: summary),
+                  orElse: () => const SizedBox.shrink(),
+                ),
               ],
             ),
           ),
@@ -237,19 +296,19 @@ class _RekapScreenState extends ConsumerState<RekapScreen> {
             child: _items.isEmpty && !_isLoading
                 ? Center(
                     child: Text(
-                      hasActiveFilter
+                      hasActiveFilter || _search.isNotEmpty
                           ? 'Gak ada transaksi yang cocok sama filter ini.'
                           : 'Belum ada catatan nih. Yuk mulai dari transaksi pertama, biar gak kirain-kirain lagi 👀',
                       textAlign: TextAlign.center,
                     ),
                   )
-                : ListView.builder(
+                : ListView(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(12),
-                    itemCount: _items.length + (_hasMore ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (index >= _items.length) {
-                        return const Padding(
+                    children: [
+                      ..._buildGroupedRows(categoryById),
+                      if (_hasMore)
+                        const Padding(
                           padding: EdgeInsets.all(16),
                           child: Center(
                             child: SizedBox(
@@ -258,26 +317,245 @@ class _RekapScreenState extends ConsumerState<RekapScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
                           ),
-                        );
-                      }
-
-                      final item = _items[index];
-                      return ListTile(
-                        leading: item.isSavingsContribution
-                            ? const Icon(Icons.savings_outlined)
-                            : null,
-                        title: Text(item.displayName),
-                        subtitle: Text(
-                          [
-                            formatDate(item.transactionDate),
-                            if (item.isSavingsContribution) 'Tabungan',
-                            if (item.note != null && item.note!.isNotEmpty) item.note!,
-                          ].join(' · '),
                         ),
-                        trailing: Text('Rp ${formatRupiah(item.amount)}'),
-                      );
-                    },
+                    ],
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Groups the already date-descending [_items] into "Hari ini" / "Kemarin"
+  /// / specific-date sections, in one pass since the query already sorts by
+  /// transaction_date desc.
+  List<Widget> _buildGroupedRows(Map<String, Category> categoryById) {
+    final widgets = <Widget>[];
+    String? currentLabel;
+
+    for (final item in _items) {
+      final label = _groupLabel(item.transactionDate);
+      if (label != currentLabel) {
+        if (currentLabel != null) widgets.add(const SizedBox(height: 16));
+        widgets.add(_DateGroupHeader(label: label));
+        widgets.add(const SizedBox(height: 8));
+        currentLabel = label;
+      } else {
+        widgets.add(const SizedBox(height: 8));
+      }
+      widgets.add(_TransactionCard(item: item, category: categoryById[item.categoryId]));
+    }
+
+    return widgets;
+  }
+
+  String _groupLabel(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final day = DateTime(date.year, date.month, date.day);
+
+    if (day == today) return 'Hari ini';
+    if (day == yesterday) return 'Kemarin';
+    return formatDate(date);
+  }
+}
+
+class _DateGroupHeader extends StatelessWidget {
+  const _DateGroupHeader({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Text(
+      label.toUpperCase(),
+      style: theme.textTheme.labelSmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.4,
+      ),
+    );
+  }
+}
+
+class _TransactionCard extends StatelessWidget {
+  const _TransactionCard({required this.item, required this.category});
+
+  final TransactionHistoryItem item;
+
+  /// Null for savings contributions (goal-linked, no category) or while
+  /// [categoriesProvider] hasn't resolved yet — falls back to a generic
+  /// icon/neutral color in that case.
+  final Category? category;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final kirainColors = theme.extension<KirainColors>();
+    final mint = kirainColors?.mint ?? theme.colorScheme.primary;
+    final coral = kirainColors?.coral ?? theme.colorScheme.secondary;
+    final neutral = theme.colorScheme.onSurfaceVariant;
+
+    final IconData icon;
+    final Color iconColor;
+    if (item.isSavingsContribution) {
+      icon = Icons.savings_outlined;
+      iconColor = neutral;
+    } else if (category != null) {
+      icon = categoryIcon(category!);
+      iconColor = categoryIconColor(category: category!, mint: mint, coral: coral, neutral: neutral);
+    } else {
+      icon = Icons.receipt_long_outlined;
+      iconColor = neutral;
+    }
+
+    final sign = item.isIncome ? '+' : '-';
+    final amountColor = item.isIncome ? mint : theme.colorScheme.onSurface;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: iconColor, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          item.displayName,
+                          style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (item.isSavingsContribution) ...[
+                        const SizedBox(width: 6),
+                        _NabungBadge(color: neutral),
+                      ],
+                    ],
+                  ),
+                  if (item.note != null && item.note!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        item.note!,
+                        style: theme.textTheme.bodySmall,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '$sign Rp ${formatRupiah(item.amount)}',
+              style: theme.textTheme.bodyMedium?.copyWith(color: amountColor, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NabungBadge extends StatelessWidget {
+  const _NabungBadge({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(6)),
+      child: Text(
+        'NABUNG',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+/// "Naik/turun X% dari bulan lalu" per group, reusing the same
+/// [BudgetGroupSummary.percentChangeFromPrevious] Home's hero card already
+/// computes — shown here per kirain-rekap-mockup.jsx so the comparison is
+/// visible while browsing history, not just on Home.
+class _PeriodComparisonCard extends StatelessWidget {
+  const _PeriodComparisonCard({required this.summary});
+
+  final DashboardSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = [
+      _buildRow(context, 'Wajib', summary.wajib),
+      _buildRow(context, 'Keinginan', summary.keinginan),
+    ].whereType<Widget>().toList();
+
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows),
+      ),
+    );
+  }
+
+  Widget? _buildRow(BuildContext context, String label, BudgetGroupSummary group) {
+    final change = group.percentChangeFromPrevious;
+    if (change == null) return null;
+
+    final theme = Theme.of(context);
+    final mint = theme.extension<KirainColors>()?.mint ?? theme.colorScheme.primary;
+    final rounded = change.abs().round();
+
+    final IconData icon;
+    final String phrase;
+    if (rounded == 0) {
+      icon = Icons.horizontal_rule;
+      phrase = 'sama';
+    } else if (change > 0) {
+      icon = Icons.arrow_upward;
+      phrase = 'naik $rounded%';
+    } else {
+      icon = Icons.arrow_downward;
+      phrase = 'turun $rounded%';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 15, color: mint),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                style: theme.textTheme.bodySmall,
+                children: [
+                  TextSpan(text: 'Pengeluaran $label kamu '),
+                  TextSpan(text: phrase, style: TextStyle(color: mint, fontWeight: FontWeight.w700)),
+                  const TextSpan(text: ' dari bulan lalu'),
+                ],
+              ),
+            ),
           ),
         ],
       ),
