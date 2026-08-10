@@ -35,6 +35,8 @@ class CategoryRepository {
     ExpenseType? expenseType,
     num? budgetLimit,
     int alertThresholdPct = 80,
+    String? icon,
+    String? color,
   }) async {
     final userId = _client.auth.currentUser!.id;
 
@@ -47,6 +49,8 @@ class CategoryRepository {
           'expense_type': expenseType?.name,
           'budget_limit': budgetLimit,
           'alert_threshold_pct': alertThresholdPct,
+          'icon': icon,
+          'color': color,
         })
         .select()
         .single();
@@ -59,6 +63,8 @@ class CategoryRepository {
     ExpenseType? expenseType,
     num? budgetLimit,
     int alertThresholdPct = 80,
+    String? icon,
+    String? color,
   }) {
     return _client
         .from('categories')
@@ -67,6 +73,8 @@ class CategoryRepository {
           'expense_type': expenseType?.name,
           'budget_limit': budgetLimit,
           'alert_threshold_pct': alertThresholdPct,
+          'icon': icon,
+          'color': color,
         })
         .eq('id', categoryId);
   }

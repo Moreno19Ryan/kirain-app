@@ -410,6 +410,7 @@ class _TransactionCard extends StatelessWidget {
         mintStrong: mintStrong,
         coralStrong: coralStrong,
         neutral: neutral,
+        brightness: theme.brightness,
       );
     } else {
       icon = Icons.receipt_long_outlined;

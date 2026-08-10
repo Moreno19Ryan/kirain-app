@@ -621,14 +621,24 @@ class _CategoryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // A category-level custom color (CLAUDE.md "Kustomisasi Icon & Warna
+    // Kategori") overrides the section's default mint/coral/neutral fill.
+    final resolvedColor = categoryFillColor(category) ?? color;
     final iconColor = active
         ? categoryIconColor(
             category: category,
             mintStrong: theme.colorScheme.onPrimary,
             coralStrong: theme.colorScheme.onSecondary,
             neutral: theme.colorScheme.onSurface,
+            brightness: theme.brightness,
           )
-        : strongColor;
+        : categoryIconColor(
+            category: category,
+            mintStrong: strongColor,
+            coralStrong: strongColor,
+            neutral: strongColor,
+            brightness: theme.brightness,
+          );
 
     const duration = Duration(milliseconds: 200);
 
@@ -645,10 +655,10 @@ class _CategoryChip extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: active ? color : color.withValues(alpha: 0.12),
+                color: active ? resolvedColor : resolvedColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: active ? color : theme.colorScheme.outline,
+                  color: active ? resolvedColor : theme.colorScheme.outline,
                   width: active ? 2 : 1,
                 ),
               ),
