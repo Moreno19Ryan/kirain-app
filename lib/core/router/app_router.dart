@@ -22,6 +22,7 @@ import '../../features/legal/presentation/terms_of_service_screen.dart';
 import '../../features/recurring/presentation/manage_recurring_screen.dart';
 import '../../features/recurring/presentation/recurring_due_prompt.dart';
 import '../../features/rekap/rekap_screen.dart';
+import '../widgets/liquid_glass_surface.dart';
 import 'go_router_refresh_stream.dart';
 
 const _authRoutes = {'/sign-in', '/verify-otp'};
@@ -169,19 +170,29 @@ class _RootScaffoldState extends ConsumerState<_RootScaffold> {
     final navigationShell = widget.navigationShell;
 
     return Scaffold(
+      // Lets each branch's scrollable content extend behind the glass nav
+      // bar instead of stopping short of it — without this, there's nothing
+      // for the BackdropFilter to actually blur.
+      extendBody: true,
       body: navigationShell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: navigationShell.currentIndex,
-        onDestinationSelected: (index) => navigationShell.goBranch(
-          index,
-          initialLocation: index == navigationShell.currentIndex,
+      bottomNavigationBar: LiquidGlassSurface(
+        topBorderOnly: true,
+        child: NavigationBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          selectedIndex: navigationShell.currentIndex,
+          onDestinationSelected: (index) => navigationShell.goBranch(
+            index,
+            initialLocation: index == navigationShell.currentIndex,
+          ),
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
+            NavigationDestination(icon: _CatatNavIcon(selected: false), selectedIcon: _CatatNavIcon(selected: true), label: 'Catat'),
+            NavigationDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: 'Rekap'),
+            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Kamu'),
+          ],
         ),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
-          NavigationDestination(icon: _CatatNavIcon(selected: false), selectedIcon: _CatatNavIcon(selected: true), label: 'Catat'),
-          NavigationDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: 'Rekap'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Kamu'),
-        ],
       ),
     );
   }
