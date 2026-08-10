@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/kirain_colors.dart';
 import '../../core/utils/format.dart';
+import '../../core/widgets/animated_linear_progress.dart';
 import '../../core/widgets/error_retry_view.dart';
 import '../../core/widgets/skeleton_box.dart';
 import '../categories/data/category.dart';
@@ -329,7 +330,7 @@ class _HeroLane extends StatelessWidget {
         else ...[
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
+            child: AnimatedLinearProgress(
               value: group.ratio.clamp(0, 1).toDouble(),
               minHeight: 8,
               color: barColor,

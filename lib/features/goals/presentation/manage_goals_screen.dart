@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/utils/format.dart';
+import '../../../core/widgets/animated_linear_progress.dart';
 import '../../../core/widgets/error_retry_view.dart';
 import '../data/savings_goal.dart';
 import '../data/savings_goal_repository.dart';
@@ -94,7 +95,7 @@ class _GoalCard extends ConsumerWidget {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: LinearProgressIndicator(value: goal.progress, minHeight: 8),
+                child: AnimatedLinearProgress(value: goal.progress, minHeight: 8),
               ),
               const SizedBox(height: 4),
               Text('Rp ${formatRupiah(goal.currentAmount)} dari Rp ${formatRupiah(goal.targetAmount)}'),

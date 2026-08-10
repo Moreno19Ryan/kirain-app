@@ -107,6 +107,19 @@ class AppTheme {
       cardTheme: CardThemeData(color: surface, surfaceTintColor: Colors.transparent),
       textTheme: _textTheme(brightness: brightness, text: text),
       extensions: [kirainColors],
+      // Same smooth transition on every platform per CLAUDE.md's "Prinsip
+      // Animasi & Transisi" — rather than each platform falling back to its
+      // own native default (Android's abrupt cut vs iOS's slide), which felt
+      // inconsistent across the app.
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.iOS: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.macOS: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
+        },
+      ),
     );
   }
 

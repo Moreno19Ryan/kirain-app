@@ -72,9 +72,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/syarat-ketentuan',
         builder: (_, _) => const TermsOfServiceScreen(),
       ),
-      StatefulShellRoute.indexedStack(
+      StatefulShellRoute(
         builder: (context, state, navigationShell) =>
             _RootScaffold(navigationShell: navigationShell),
+        navigatorContainerBuilder: (context, navigationShell, children) =>
+            _FadeBranchContainer(currentIndex: navigationShell.currentIndex, children: children),
         branches: [
           StatefulShellBranch(
             routes: [GoRoute(path: '/', builder: (_, _) => const HomeScreen())],
@@ -97,6 +99,51 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+/// Custom [ShellNavigationContainerBuilder] replacing go_router's default
+/// `IndexedStack`-only container — that default swaps branches with a hard
+/// cut, which CLAUDE.md's "Prinsip Animasi & Transisi" explicitly calls out
+/// as an instant/patah transition to fix. Keeps the same state-preservation
+/// behavior as the default (every branch stays mounted, ticker paused while
+/// inactive via [TickerMode]) but cross-fades between them instead of
+/// cutting instantly.
+class _FadeBranchContainer extends StatelessWidget {
+  const _FadeBranchContainer({required this.currentIndex, required this.children});
+
+  final int currentIndex;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        for (var i = 0; i < children.length; i++)
+          _AnimatedBranch(active: i == currentIndex, child: children[i]),
+      ],
+    );
+  }
+}
+
+class _AnimatedBranch extends StatelessWidget {
+  const _AnimatedBranch({required this.active, required this.child});
+
+  final bool active;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      ignoring: !active,
+      child: AnimatedOpacity(
+        opacity: active ? 1 : 0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        child: TickerMode(enabled: active, child: child),
+      ),
+    );
+  }
+}
 
 /// Stateful (rather than HomeScreen) so the due-recurring check runs once
 /// per app session without coupling HomeScreen's tests to recurring-feature
