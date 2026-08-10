@@ -28,6 +28,12 @@ void main() {
       expect(scheme.onError, const Color(0xFF0D1412));
     });
 
+    test('container roles are explicit tokens, not fromSeed-derived tones', () {
+      expect(scheme.onPrimaryContainer, const Color(0xFF7FE0C4)); // mintStrong == mint in dark
+      expect(scheme.onSecondaryContainer, const Color(0xFFFF8B5E)); // coralStrong == coral in dark
+      expect(scheme.surfaceContainerHigh, const Color(0xFF1E2B25)); // surface2
+    });
+
     test('scaffold background is bg, card surface is the surface token', () {
       expect(AppTheme.dark.scaffoldBackgroundColor, const Color(0xFF0D1412));
       expect(AppTheme.dark.cardTheme.color, const Color(0xFF16211D));
@@ -83,6 +89,17 @@ void main() {
       expect(colors.coralStrong, const Color(0xFFE2613A));
       expect(colors.mintStrong, isNot(colors.mint));
       expect(colors.coralStrong, isNot(colors.coral));
+    });
+
+    test('container roles use the darkened strong variants, not a fromSeed pastel tone', () {
+      // The regression this guards: ColorScheme.fromSeed() only fills in
+      // the slots explicitly overridden, leaving onPrimaryContainer/
+      // onSecondaryContainer as algorithmic light-mode tones close to the
+      // container's own background — text/icons painted with those read as
+      // nearly invisible (the "icon kategori nyaris gak keliatan" bug).
+      expect(scheme.onPrimaryContainer, const Color(0xFF12946E)); // mintStrong
+      expect(scheme.onSecondaryContainer, const Color(0xFFE2613A)); // coralStrong
+      expect(scheme.surfaceContainerHigh, const Color(0xFFEFF5F1)); // surface2
     });
   });
 }

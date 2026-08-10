@@ -46,28 +46,57 @@ class AppTheme {
     required Color coral,
     required KirainColors kirainColors,
   }) {
+    final mintStrong = kirainColors.mintStrong;
+    final coralStrong = kirainColors.coralStrong;
+    final surface2 = kirainColors.surface2;
+
+    // Every field below is an exact token from CLAUDE.md's palette table, or
+    // a controlled blend of two tokens — never a `fromSeed()`-derived tone.
+    // fromSeed() only fills the slots we explicitly override, leaving things
+    // like primaryContainer/surfaceContainer* as algorithmic pastel tones
+    // that, in light mode, produced near-invisible mint-on-pale-mint
+    // elements (e.g. category icons). Full explicit definition per
+    // CLAUDE.md's "Implementasi ColorScheme — WAJIB Eksplisit".
+    //
     // "Zona Kirain" (over-budget) deliberately reuses coral instead of a new
     // alarm-red — same brand family, just a more urgent context (CLAUDE.md
-    // 6.5). So `error` is seeded from coral, not a separate hue, which also
-    // means every existing `colorScheme.error` use (delete confirmations,
-    // form validation, Zona Kirain) picks this up automatically.
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: mint,
+    // 6.5). So `error` is coral, not a separate hue, which also means every
+    // existing `colorScheme.error` use (delete confirmations, form
+    // validation, Zona Kirain) picks this up automatically.
+    final colorScheme = ColorScheme(
       brightness: brightness,
-      secondary: coral,
-      error: coral,
-    ).copyWith(
       primary: mint,
       onPrimary: _onFill,
+      primaryContainer: Color.alphaBlend(mint.withValues(alpha: 0.18), surface),
+      onPrimaryContainer: mintStrong,
       secondary: coral,
       onSecondary: _onFill,
+      secondaryContainer: Color.alphaBlend(coral.withValues(alpha: 0.18), surface),
+      onSecondaryContainer: coralStrong,
+      tertiary: mint,
+      onTertiary: _onFill,
+      tertiaryContainer: Color.alphaBlend(mint.withValues(alpha: 0.18), surface),
+      onTertiaryContainer: mintStrong,
       error: coral,
       onError: _onFill,
+      errorContainer: Color.alphaBlend(coral.withValues(alpha: 0.18), surface),
+      onErrorContainer: coralStrong,
       surface: bg,
       onSurface: text,
+      surfaceContainerLowest: bg,
+      surfaceContainerLow: surface,
+      surfaceContainer: surface,
+      surfaceContainerHigh: surface2,
+      surfaceContainerHighest: border,
       onSurfaceVariant: textDim,
       outline: border,
-      surfaceContainerHighest: border,
+      outlineVariant: border,
+      shadow: Colors.black,
+      scrim: Colors.black54,
+      inverseSurface: text,
+      onInverseSurface: bg,
+      inversePrimary: mintStrong,
+      surfaceTint: Colors.transparent,
     );
 
     return ThemeData(

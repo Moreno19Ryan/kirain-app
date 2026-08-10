@@ -94,8 +94,8 @@ class _CategoryListTile extends ConsumerWidget {
     final kirainColors = theme.extension<KirainColors>();
     final iconColor = categoryIconColor(
       category: category,
-      mint: kirainColors?.mint ?? theme.colorScheme.primary,
-      coral: kirainColors?.coral ?? theme.colorScheme.secondary,
+      mintStrong: kirainColors?.mintStrong ?? theme.colorScheme.onPrimaryContainer,
+      coralStrong: kirainColors?.coralStrong ?? theme.colorScheme.onSecondaryContainer,
       neutral: theme.colorScheme.onSurfaceVariant,
     );
 
