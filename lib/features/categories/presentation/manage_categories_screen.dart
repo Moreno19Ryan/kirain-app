@@ -7,6 +7,7 @@ import '../../../core/widgets/error_retry_view.dart';
 import '../data/category.dart';
 import '../data/category_icons.dart';
 import '../data/category_repository.dart';
+import 'category_form_dialog.dart';
 
 class ManageCategoriesScreen extends ConsumerWidget {
   const ManageCategoriesScreen({super.key});
@@ -18,7 +19,7 @@ class ManageCategoriesScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Kelola Kategori')),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showCategoryForm(context, ref),
+        onPressed: () => showCategoryFormDialog(context, ref),
         child: const Icon(Icons.add),
       ),
       body: categoriesAsync.when(
@@ -105,7 +106,7 @@ class _CategoryListTile extends ConsumerWidget {
       subtitle: category.kind == CategoryKind.expense
           ? Text(limit == null || limit == 0 ? 'Belum ada limit' : 'Limit Rp ${limit.toStringAsFixed(0)}')
           : null,
-      onTap: () => _showCategoryForm(context, ref, existing: category),
+      onTap: () => showCategoryFormDialog(context, ref, existing: category),
       trailing: IconButton(
         icon: const Icon(Icons.delete_outline),
         onPressed: () => _confirmDelete(context, ref, category),
@@ -146,121 +147,4 @@ Future<void> _confirmDelete(BuildContext context, WidgetRef ref, Category catego
         : 'Yah, gagal hapus kategori. Coba lagi ya.';
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
-}
-
-Future<void> _showCategoryForm(BuildContext context, WidgetRef ref, {Category? existing}) async {
-  final nameController = TextEditingController(text: existing?.name ?? '');
-  final limitController = TextEditingController(
-    text: existing?.budgetLimit == null ? '' : existing!.budgetLimit!.toStringAsFixed(0),
-  );
-  var kind = existing?.kind ?? CategoryKind.expense;
-  var expenseType = existing?.expenseType ?? ExpenseType.keinginan;
-  var alertThresholdPct = existing?.alertThresholdPct ?? 80;
-
-  final saved = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) {
-      return StatefulBuilder(
-        builder: (dialogContext, setDialogState) {
-          return AlertDialog(
-            title: Text(existing == null ? 'Kategori Baru' : 'Edit Kategori'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(labelText: 'Nama kategori'),
-                    autofocus: true,
-                  ),
-                  const SizedBox(height: 12),
-                  if (existing == null) ...[
-                    SegmentedButton<CategoryKind>(
-                      segments: const [
-                        ButtonSegment(value: CategoryKind.expense, label: Text('Pengeluaran')),
-                        ButtonSegment(value: CategoryKind.income, label: Text('Pemasukan')),
-                      ],
-                      selected: {kind},
-                      onSelectionChanged: (selection) =>
-                          setDialogState(() => kind = selection.first),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  if (kind == CategoryKind.expense) ...[
-                    SegmentedButton<ExpenseType>(
-                      segments: const [
-                        ButtonSegment(value: ExpenseType.wajib, label: Text('Wajib')),
-                        ButtonSegment(value: ExpenseType.keinginan, label: Text('Keinginan')),
-                      ],
-                      selected: {expenseType},
-                      onSelectionChanged: (selection) =>
-                          setDialogState(() => expenseType = selection.first),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: limitController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Limit per siklus (Rp, opsional)',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text('Alert Zona Waspada di $alertThresholdPct% dari limit'),
-                    Slider(
-                      value: alertThresholdPct.toDouble(),
-                      min: 50,
-                      max: 100,
-                      divisions: 10,
-                      label: '$alertThresholdPct%',
-                      onChanged: (value) =>
-                          setDialogState(() => alertThresholdPct = value.round()),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Batal'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Simpan'),
-              ),
-            ],
-          );
-        },
-      );
-    },
-  );
-
-  if (saved != true) return;
-
-  final name = nameController.text.trim();
-  if (name.isEmpty) return;
-
-  final limit = num.tryParse(limitController.text.trim());
-  final repository = ref.read(categoryRepositoryProvider);
-
-  if (existing == null) {
-    await repository.createCategory(
-      name: name,
-      kind: kind,
-      expenseType: kind == CategoryKind.expense ? expenseType : null,
-      budgetLimit: kind == CategoryKind.expense ? limit : null,
-      alertThresholdPct: alertThresholdPct,
-    );
-  } else {
-    await repository.updateCategory(
-      categoryId: existing.id,
-      name: name,
-      expenseType: existing.kind == CategoryKind.expense ? expenseType : null,
-      budgetLimit: existing.kind == CategoryKind.expense ? limit : null,
-      alertThresholdPct: alertThresholdPct,
-    );
-  }
-
-  ref.invalidate(categoriesProvider);
 }

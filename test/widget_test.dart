@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:kirain/features/app_lock/data/app_lock_repository.dart';
 import 'package:kirain/features/app_lock/presentation/lock_screen.dart';
@@ -183,6 +184,7 @@ void main() {
         ),
       ];
 
+      _growTestSurface(tester);
       await tester.pumpWidget(
         ProviderScope(
           overrides: [categoriesProvider.overrideWith((ref) async => categories)],
@@ -259,6 +261,45 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Eh tunggu dulu'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'catat form creates a new category via the + Tambah kategori shortcut and selects it',
+    (tester) async {
+      const wajibCategory = Category(
+        id: 'w1',
+        name: 'Makan & Minum',
+        kind: CategoryKind.expense,
+        expenseType: ExpenseType.wajib,
+      );
+      final fakeRepo = _FakeCategoryRepository([wajibCategory]);
+
+      _growTestSurface(tester);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [categoryRepositoryProvider.overrideWithValue(fakeRepo)],
+          child: const MaterialApp(home: CatatScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Tambah'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Kategori Baru'), findsOneWidget);
+
+      await tester.enterText(find.widgetWithText(TextField, 'Nama kategori'), 'Hadiah');
+      await tester.tap(find.text('Simpan'));
+      await tester.pumpAndSettle();
+
+      // The new category now shows up in the picker (fetchCategories was
+      // invalidated and re-run against the fake repo's updated list) and is
+      // auto-selected — shown by the Wajib/Keinginan toggle appearing,
+      // since only an expense category picks that up.
+      expect(find.text('Hadiah'), findsWidgets);
+      expect(find.text('Wajib'), findsOneWidget);
+      expect(find.text('Keinginan'), findsOneWidget);
     },
   );
 
@@ -698,4 +739,40 @@ class _FakeAppLockRepository extends AppLockRepository {
 
   @override
   Future<bool> verifyPin(String pin) async => verifyResult;
+}
+
+class _FakeCategoryRepository extends CategoryRepository {
+  _FakeCategoryRepository(this.categories)
+    : super(
+        SupabaseClient(
+          'https://example.supabase.co',
+          'test-anon-key',
+          authOptions: const AuthClientOptions(autoRefreshToken: false),
+        ),
+      );
+
+  final List<Category> categories;
+
+  @override
+  Future<List<Category>> fetchCategories() async => List.of(categories);
+
+  @override
+  Future<Category> createCategory({
+    required String name,
+    required CategoryKind kind,
+    ExpenseType? expenseType,
+    num? budgetLimit,
+    int alertThresholdPct = 80,
+  }) async {
+    final created = Category(
+      id: 'new-${categories.length}',
+      name: name,
+      kind: kind,
+      expenseType: expenseType,
+      budgetLimit: budgetLimit,
+      alertThresholdPct: alertThresholdPct,
+    );
+    categories.add(created);
+    return created;
+  }
 }
