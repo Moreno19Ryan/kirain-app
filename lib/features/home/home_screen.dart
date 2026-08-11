@@ -5,6 +5,7 @@ import '../../core/theme/kirain_colors.dart';
 import '../../core/utils/format.dart';
 import '../../core/widgets/animated_linear_progress.dart';
 import '../../core/widgets/error_retry_view.dart';
+import '../../core/widgets/kaget_eyebrows.dart';
 import '../../core/widgets/skeleton_box.dart';
 import '../categories/data/category.dart';
 import '../categories/data/category_icons.dart';
@@ -219,7 +220,11 @@ class _HeroCard extends StatelessWidget {
           Positioned(
             top: 0,
             right: 0,
-            child: _KagetEyebrows(leftColor: leftEyebrow, rightColor: rightEyebrow, steep: steepEyebrows),
+            child: SizedBox(
+              width: 96,
+              height: 43,
+              child: KagetEyebrows(leftColor: leftEyebrow, rightColor: rightEyebrow, steep: steepEyebrows),
+            ),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -485,83 +490,6 @@ class _CategoryTile extends ConsumerWidget {
       trailing: const Icon(Icons.edit_outlined, size: 18),
       onTap: () => _showEditLimitDialog(context, ref, item.category),
     );
-  }
-}
-
-/// The two asymmetric "raised eyebrow" arcs that are KIRAIN's signature
-/// visual mark (CLAUDE.md 6.5) — reinterpreted from the reference SVG paths
-/// as a CustomPainter rather than ported directly. `steep` mirrors the
-/// reference's Zona Kirain variant: same arcs, pulled tighter for a more
-/// urgent "kaget" expression.
-class _KagetEyebrows extends StatelessWidget {
-  const _KagetEyebrows({required this.leftColor, required this.rightColor, required this.steep});
-
-  final Color leftColor;
-  final Color rightColor;
-  final bool steep;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 96,
-      height: 43,
-      child: CustomPaint(
-        painter: _KagetEyebrowsPainter(leftColor: leftColor, rightColor: rightColor, steep: steep),
-      ),
-    );
-  }
-}
-
-class _KagetEyebrowsPainter extends CustomPainter {
-  _KagetEyebrowsPainter({required this.leftColor, required this.rightColor, required this.steep});
-
-  final Color leftColor;
-  final Color rightColor;
-  final bool steep;
-
-  /// Reference viewBox from the mockup's SVG — canvas is scaled to fit
-  /// whatever size the widget's actually given.
-  static const _refWidth = 120.0;
-  static const _refHeight = 54.0;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.save();
-    canvas.scale(size.width / _refWidth, size.height / _refHeight);
-
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 7
-      ..strokeCap = StrokeCap.round;
-
-    final left = Path();
-    final right = Path();
-    if (steep) {
-      left
-        ..moveTo(6, 44)
-        ..quadraticBezierTo(30, -2, 54, 26);
-      right
-        ..moveTo(66, 26)
-        ..quadraticBezierTo(90, -2, 114, 44);
-    } else {
-      left
-        ..moveTo(6, 40)
-        ..quadraticBezierTo(30, 2, 54, 30);
-      right
-        ..moveTo(66, 30)
-        ..quadraticBezierTo(90, 2, 114, 40);
-    }
-
-    canvas.drawPath(left, paint..color = leftColor);
-    canvas.drawPath(right, paint..color = rightColor);
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _KagetEyebrowsPainter oldDelegate) {
-    return leftColor != oldDelegate.leftColor ||
-        rightColor != oldDelegate.rightColor ||
-        steep != oldDelegate.steep;
   }
 }
 
