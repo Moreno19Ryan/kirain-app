@@ -59,23 +59,54 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   flutter_native_splash: ^2.4.8
+  flutter_launcher_icons: ^0.14.4
+
+# App icon config, consumed by `dart run flutter_launcher_icons` (dev-time
+# code-gen, not a runtime dep). "Glass Depth" concept per CLAUDE.md's "App
+# Icon — FINAL" — the source PNGs (here and under assets/splash/) are
+# generated from the same alis-kaget mark used elsewhere in the app; see
+# tool/generate_icon_assets.dart to regenerate them after any design tweak.
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/icon/icon.png
+  adaptive_icon_background: assets/icon/adaptive_background.png
+  adaptive_icon_foreground: assets/icon/adaptive_foreground.png
+  # The foreground PNG already places the mark at 60-65% width itself (per
+  # CLAUDE.md's spec) with generous safe-zone padding built in — default is
+  # 16, which would shrink it a second time on top of that.
+  adaptive_icon_foreground_inset: 0
 
 # Native splash screen config, consumed by `dart run
 # flutter_native_splash:create` (dev-time code-gen, not a runtime dep).
-# Teal matches the app's existing colorSchemeSeed (lib/core/theme/app_theme.dart)
-# rather than introducing a new brand color — CLAUDE.md still marks the
-# final palette choice as open, so this reuses what's already live
-# everywhere else in the app instead of deciding a new one here.
+# Colors are the app's own `bg` token (AppTheme/KirainColors), not the old
+# leftover Material teal — the splash should read as a seamless continuation
+# into the app's real background, not a flash-cut from an unrelated color.
+#
+# `image`/`image_dark` (pre-Android-12) keep the wide "KIRAIN" wordmark —
+# legacy splash just centers it at natural aspect ratio, no crop. The
+# original asset is white-on-transparent (fine on the dark bg it was
+# already used with) but would have been invisible on the new light bg, so
+# `splash_logo_light.png` is the same wordmark recolored dark for that mode
+# — same fill-vs-strong pairing everywhere else in the app.
+# `android_12.image`/`image_dark` are DIFFERENT, square mark-only assets —
+# Android 12+'s splash API forces content into a small icon-shaped safe
+# zone like an adaptive icon, not a full-width banner, so feeding it the
+# wide wordmark is what was clipping "KIRAIN" on the sides. These reuse the
+# alis-kaget mark but with mint/coral (dark bg) or mintStrong/coralStrong
+# (light bg) instead of the app icon's own dark+coral pair — that pair is
+# tuned for the icon's mint gradient background and its left arc (#0D1412)
+# would be invisible against a flat #0D1412 splash background.
 flutter_native_splash:
-  color: "#009688"
-  image: assets/splash/splash_logo.png
-  color_dark: "#009688"
+  color: "#F6FAF7"
+  image: assets/splash/splash_logo_light.png
+  color_dark: "#0D1412"
   image_dark: assets/splash/splash_logo.png
   android_12:
-    color: "#009688"
-    image: assets/splash/splash_logo.png
-    color_dark: "#009688"
-    image_dark: assets/splash/splash_logo.png
+    color: "#F6FAF7"
+    image: assets/splash/splash_icon_light.png
+    color_dark: "#0D1412"
+    image_dark: assets/splash/splash_icon_dark.png
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
