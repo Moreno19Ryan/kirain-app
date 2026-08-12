@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'kirain_colors.dart';
 
@@ -126,10 +125,13 @@ class AppTheme {
   /// Display/heading/angka -> Sora, body/label -> Inter, per CLAUDE.md 6.5's
   /// "Tipografi — FINAL". Built off Material 3's default sizes/weights so
   /// nothing else about the type scale changes, just the font families.
+  /// Both are bundled local assets (see pubspec.yaml's `fonts:` section) —
+  /// not google_fonts, which fetches over the network on first use and has
+  /// no place in an offline-first app.
   static TextTheme _textTheme({required Brightness brightness, required Color text}) {
     final base = ThemeData(brightness: brightness, useMaterial3: true).textTheme;
-    final sora = GoogleFonts.soraTextTheme(base);
-    final inter = GoogleFonts.interTextTheme(base);
+    final sora = _withFamily(base, 'Sora');
+    final inter = _withFamily(base, 'Inter');
 
     return inter
         .copyWith(
@@ -144,5 +146,30 @@ class AppTheme {
           titleSmall: sora.titleSmall,
         )
         .apply(bodyColor: text, displayColor: text);
+  }
+
+  /// Applies [family] to every slot in [base], keeping each slot's own
+  /// size/weight/spacing untouched — the local equivalent of what
+  /// `GoogleFonts.xTextTheme()` used to do.
+  static TextTheme _withFamily(TextTheme base, String family) {
+    TextStyle? apply(TextStyle? style) => style?.copyWith(fontFamily: family);
+
+    return base.copyWith(
+      displayLarge: apply(base.displayLarge),
+      displayMedium: apply(base.displayMedium),
+      displaySmall: apply(base.displaySmall),
+      headlineLarge: apply(base.headlineLarge),
+      headlineMedium: apply(base.headlineMedium),
+      headlineSmall: apply(base.headlineSmall),
+      titleLarge: apply(base.titleLarge),
+      titleMedium: apply(base.titleMedium),
+      titleSmall: apply(base.titleSmall),
+      bodyLarge: apply(base.bodyLarge),
+      bodyMedium: apply(base.bodyMedium),
+      bodySmall: apply(base.bodySmall),
+      labelLarge: apply(base.labelLarge),
+      labelMedium: apply(base.labelMedium),
+      labelSmall: apply(base.labelSmall),
+    );
   }
 }

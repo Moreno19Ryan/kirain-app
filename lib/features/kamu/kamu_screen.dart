@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/settings/data/energy_saver_repository.dart';
 import '../app_lock/data/app_lock_repository.dart';
 import '../auth/data/auth_repository.dart';
 import 'data/account_repository.dart';
@@ -13,6 +14,7 @@ class KamuScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final email = ref.watch(authRepositoryProvider).currentUser?.email ?? '-';
     final lockEnabledAsync = ref.watch(appLockEnabledProvider);
+    final energySaverAsync = ref.watch(energySaverEnabledProvider);
 
     return Scaffold(
       body: SafeArea(
@@ -58,6 +60,20 @@ class KamuScreen extends ConsumerWidget {
                       value: enabled,
                       onChanged: (value) =>
                           value ? _setupAppLock(context, ref) : _disableAppLock(context, ref),
+                    ),
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, _) => const SizedBox.shrink(),
+                  ),
+                  energySaverAsync.when(
+                    data: (enabled) => SwitchListTile(
+                      secondary: const Icon(Icons.battery_saver_outlined),
+                      title: const Text('Mode Hemat Energi'),
+                      subtitle: const Text('Matiin efek blur kaca biar HP kamu tetap enteng dipake'),
+                      value: enabled,
+                      onChanged: (value) async {
+                        await ref.read(energySaverRepositoryProvider).setEnabled(value);
+                        ref.invalidate(energySaverEnabledProvider);
+                      },
                     ),
                     loading: () => const SizedBox.shrink(),
                     error: (_, _) => const SizedBox.shrink(),

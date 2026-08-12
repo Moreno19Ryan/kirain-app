@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/utils/format.dart';
+import '../../../core/utils/ids.dart';
 import '../../categories/data/category.dart';
 
 final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
@@ -108,6 +109,10 @@ class TransactionRepository {
     final userId = _client.auth.currentUser!.id;
 
     return _client.from('transactions').insert({
+      // Client-generated, not left to the column's `gen_random_uuid()`
+      // default — see core/utils/ids.dart for why (offline-retry
+      // idempotency).
+      'id': newId(),
       'user_id': userId,
       'category_id': categoryId,
       'goal_id': null,
@@ -129,6 +134,7 @@ class TransactionRepository {
     final userId = _client.auth.currentUser!.id;
 
     return _client.from('transactions').insert({
+      'id': newId(),
       'user_id': userId,
       'category_id': null,
       'goal_id': goalId,
