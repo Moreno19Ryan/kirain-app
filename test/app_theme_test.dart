@@ -50,14 +50,11 @@ void main() {
 
     test('display/heading/title roles use Sora, body/label roles use Inter', () {
       final text = AppTheme.dark.textTheme;
-      // google_fonts composes fontFamily as "Family_weight" internally, but
-      // always keeps the plain family name as the first fallback — that's
-      // the stable thing to assert against.
       for (final style in [text.displayLarge, text.headlineMedium, text.titleSmall]) {
-        expect(style?.fontFamilyFallback, contains('Sora'));
+        expect(style?.fontFamily, 'Sora');
       }
       for (final style in [text.bodyLarge, text.bodyMedium, text.labelSmall]) {
-        expect(style?.fontFamilyFallback, contains('Inter'));
+        expect(style?.fontFamily, 'Inter');
       }
     });
 
