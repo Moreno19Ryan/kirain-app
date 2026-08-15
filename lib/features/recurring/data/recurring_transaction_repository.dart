@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/utils/format.dart';
+import '../../../core/utils/ids.dart';
 import '../../categories/data/category.dart';
 import '../../transactions/data/transaction_repository.dart';
 import 'recurring_transaction.dart';
@@ -99,6 +100,7 @@ class RecurringTransactionRepository {
   /// next_due_date to the following occurrence.
   Future<void> confirmOccurrence(RecurringTransaction item) async {
     await _transactionRepository.addTransaction(
+      id: newId(),
       categoryId: item.categoryId,
       amount: item.amount,
       note: item.note,

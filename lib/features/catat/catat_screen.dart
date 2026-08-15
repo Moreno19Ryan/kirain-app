@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/kirain_colors.dart';
 import '../../core/utils/format.dart';
+import '../../core/utils/ids.dart';
 import '../../core/widgets/error_retry_view.dart';
 import '../../core/widgets/skeleton_box.dart';
 import '../categories/data/category.dart';
@@ -115,6 +116,7 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
       await ref
           .read(transactionRepositoryProvider)
           .addTransaction(
+            id: newId(),
             categoryId: category.id,
             amount: amount,
             note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
