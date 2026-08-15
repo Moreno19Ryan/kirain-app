@@ -49,11 +49,11 @@ class $LocalOutboxItemsTable extends LocalOutboxItems
   );
   static const VerificationMeta _amountMeta = const VerificationMeta('amount');
   @override
-  late final GeneratedColumn<double> amount = GeneratedColumn<double>(
+  late final GeneratedColumn<int> amount = GeneratedColumn<int>(
     'amount',
     aliasedName,
     false,
-    type: DriftSqlType.double,
+    type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
   static const VerificationMeta _noteMeta = const VerificationMeta('note');
@@ -290,7 +290,7 @@ class $LocalOutboxItemsTable extends LocalOutboxItems
         data['${effectivePrefix}goal_id'],
       ),
       amount: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
+        DriftSqlType.int,
         data['${effectivePrefix}amount'],
       )!,
       note: attachedDatabase.typeMapping.read(
@@ -351,11 +351,15 @@ class LocalOutboxItem extends DataClass implements Insertable<LocalOutboxItem> {
   final String? categoryId;
   final String? goalId;
 
-  /// Same units TransactionRepository already sends Supabase — full Rupiah,
-  /// not cents. This table is a delivery buffer, not the ledger of record
-  /// (Supabase's `numeric(14,2)` column stays authoritative once synced), so
-  /// REAL is precise enough for the values involved here.
-  final double amount;
+  /// Exact whole Rupiah — the smallest currency unit KIRAIN's domain model
+  /// actually uses today (Catat's amount field is `decimal: false`; there's
+  /// no sen/cents concept anywhere in the app). Stored as an integer, not
+  /// REAL/double, so this durable local copy of a financial amount can't
+  /// drift from what the user typed through binary floating-point rounding.
+  /// Supabase's `numeric(14,2)` column stays authoritative once synced —
+  /// this is a delivery buffer, not the ledger of record — but that's not a
+  /// reason to be inexact here.
+  final int amount;
   final String? note;
 
   /// ISO date string ('yyyy-MM-dd'), matching core/utils/format.dart's
@@ -403,7 +407,7 @@ class LocalOutboxItem extends DataClass implements Insertable<LocalOutboxItem> {
     if (!nullToAbsent || goalId != null) {
       map['goal_id'] = Variable<String>(goalId);
     }
-    map['amount'] = Variable<double>(amount);
+    map['amount'] = Variable<int>(amount);
     if (!nullToAbsent || note != null) {
       map['note'] = Variable<String>(note);
     }
@@ -465,7 +469,7 @@ class LocalOutboxItem extends DataClass implements Insertable<LocalOutboxItem> {
       userId: serializer.fromJson<String>(json['userId']),
       categoryId: serializer.fromJson<String?>(json['categoryId']),
       goalId: serializer.fromJson<String?>(json['goalId']),
-      amount: serializer.fromJson<double>(json['amount']),
+      amount: serializer.fromJson<int>(json['amount']),
       note: serializer.fromJson<String?>(json['note']),
       transactionDate: serializer.fromJson<String>(json['transactionDate']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -486,7 +490,7 @@ class LocalOutboxItem extends DataClass implements Insertable<LocalOutboxItem> {
       'userId': serializer.toJson<String>(userId),
       'categoryId': serializer.toJson<String?>(categoryId),
       'goalId': serializer.toJson<String?>(goalId),
-      'amount': serializer.toJson<double>(amount),
+      'amount': serializer.toJson<int>(amount),
       'note': serializer.toJson<String?>(note),
       'transactionDate': serializer.toJson<String>(transactionDate),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -505,7 +509,7 @@ class LocalOutboxItem extends DataClass implements Insertable<LocalOutboxItem> {
     String? userId,
     Value<String?> categoryId = const Value.absent(),
     Value<String?> goalId = const Value.absent(),
-    double? amount,
+    int? amount,
     Value<String?> note = const Value.absent(),
     String? transactionDate,
     DateTime? createdAt,
@@ -623,7 +627,7 @@ class LocalOutboxItemsCompanion extends UpdateCompanion<LocalOutboxItem> {
   final Value<String> userId;
   final Value<String?> categoryId;
   final Value<String?> goalId;
-  final Value<double> amount;
+  final Value<int> amount;
   final Value<String?> note;
   final Value<String> transactionDate;
   final Value<DateTime> createdAt;
@@ -654,7 +658,7 @@ class LocalOutboxItemsCompanion extends UpdateCompanion<LocalOutboxItem> {
     required String userId,
     this.categoryId = const Value.absent(),
     this.goalId = const Value.absent(),
-    required double amount,
+    required int amount,
     this.note = const Value.absent(),
     required String transactionDate,
     required DateTime createdAt,
@@ -675,7 +679,7 @@ class LocalOutboxItemsCompanion extends UpdateCompanion<LocalOutboxItem> {
     Expression<String>? userId,
     Expression<String>? categoryId,
     Expression<String>? goalId,
-    Expression<double>? amount,
+    Expression<int>? amount,
     Expression<String>? note,
     Expression<String>? transactionDate,
     Expression<DateTime>? createdAt,
@@ -709,7 +713,7 @@ class LocalOutboxItemsCompanion extends UpdateCompanion<LocalOutboxItem> {
     Value<String>? userId,
     Value<String?>? categoryId,
     Value<String?>? goalId,
-    Value<double>? amount,
+    Value<int>? amount,
     Value<String?>? note,
     Value<String>? transactionDate,
     Value<DateTime>? createdAt,
@@ -754,7 +758,7 @@ class LocalOutboxItemsCompanion extends UpdateCompanion<LocalOutboxItem> {
       map['goal_id'] = Variable<String>(goalId.value);
     }
     if (amount.present) {
-      map['amount'] = Variable<double>(amount.value);
+      map['amount'] = Variable<int>(amount.value);
     }
     if (note.present) {
       map['note'] = Variable<String>(note.value);
@@ -829,7 +833,7 @@ typedef $$LocalOutboxItemsTableCreateCompanionBuilder =
       required String userId,
       Value<String?> categoryId,
       Value<String?> goalId,
-      required double amount,
+      required int amount,
       Value<String?> note,
       required String transactionDate,
       required DateTime createdAt,
@@ -846,7 +850,7 @@ typedef $$LocalOutboxItemsTableUpdateCompanionBuilder =
       Value<String> userId,
       Value<String?> categoryId,
       Value<String?> goalId,
-      Value<double> amount,
+      Value<int> amount,
       Value<String?> note,
       Value<String> transactionDate,
       Value<DateTime> createdAt,
@@ -887,7 +891,7 @@ class $$LocalOutboxItemsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get amount => $composableBuilder(
+  ColumnFilters<int> get amount => $composableBuilder(
     column: $table.amount,
     builder: (column) => ColumnFilters(column),
   );
@@ -963,7 +967,7 @@ class $$LocalOutboxItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get amount => $composableBuilder(
+  ColumnOrderings<int> get amount => $composableBuilder(
     column: $table.amount,
     builder: (column) => ColumnOrderings(column),
   );
@@ -1032,7 +1036,7 @@ class $$LocalOutboxItemsTableAnnotationComposer
   GeneratedColumn<String> get goalId =>
       $composableBuilder(column: $table.goalId, builder: (column) => column);
 
-  GeneratedColumn<double> get amount =>
+  GeneratedColumn<int> get amount =>
       $composableBuilder(column: $table.amount, builder: (column) => column);
 
   GeneratedColumn<String> get note =>
@@ -1114,7 +1118,7 @@ class $$LocalOutboxItemsTableTableManager
                 Value<String> userId = const Value.absent(),
                 Value<String?> categoryId = const Value.absent(),
                 Value<String?> goalId = const Value.absent(),
-                Value<double> amount = const Value.absent(),
+                Value<int> amount = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 Value<String> transactionDate = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -1146,7 +1150,7 @@ class $$LocalOutboxItemsTableTableManager
                 required String userId,
                 Value<String?> categoryId = const Value.absent(),
                 Value<String?> goalId = const Value.absent(),
-                required double amount,
+                required int amount,
                 Value<String?> note = const Value.absent(),
                 required String transactionDate,
                 required DateTime createdAt,

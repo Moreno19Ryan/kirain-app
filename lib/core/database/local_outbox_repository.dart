@@ -21,7 +21,7 @@ final localOutboxRepositoryProvider = Provider<LocalOutboxRepository>((ref) {
 /// since the outbox only needs to carry the payload through, not interpret
 /// it.
 class OutboxDraft {
-  const OutboxDraft({
+  OutboxDraft({
     required this.id,
     required this.userId,
     this.categoryId,
@@ -31,20 +31,37 @@ class OutboxDraft {
     required this.transactionDate,
     required this.createdAt,
     this.expenseType,
-  }) : assert(
-         (categoryId == null) != (goalId == null),
-         'exactly one of categoryId/goalId must be set',
-       );
+  }) {
+    // A real runtime check, not `assert` — asserts compile out of release
+    // builds, and a malformed outbox row (both/neither of category+goal
+    // set) is exactly the kind of thing that must never silently reach
+    // storage in a financial app just because it happened not to trip in a
+    // debug build. The [LocalOutboxItems] CHECK constraint is the second
+    // line of defense for anything that reaches the DAO some other way.
+    if ((categoryId == null) == (goalId == null)) {
+      throw ArgumentError(
+        'OutboxDraft requires exactly one of categoryId/goalId to be set '
+        '(got categoryId: $categoryId, goalId: $goalId)',
+      );
+    }
+  }
 
   final String id;
   final String userId;
 
   /// Exactly one of [categoryId] / [goalId] is set, matching
   /// TransactionRepository's addTransaction (category) vs
-  /// addSavingsContribution (goal) split.
+  /// addSavingsContribution (goal) split. Enforced in the constructor body
+  /// above and backstopped by a CHECK constraint on [LocalOutboxItems].
   final String? categoryId;
   final String? goalId;
-  final num amount;
+
+  /// Exact whole Rupiah — see [LocalOutboxItems.amount] for why this is an
+  /// int rather than num/double. Whoever eventually wires this into
+  /// TransactionRepository (which still takes `num amount`, matching
+  /// Supabase's `numeric(14,2)`) owns converting at that boundary; nothing
+  /// upstream of this class should be introducing fractional Rupiah.
+  final int amount;
   final String? note;
 
   /// ISO date string ('yyyy-MM-dd') — see core/utils/format.dart's isoDate().
@@ -71,7 +88,7 @@ class LocalOutboxRepository {
             userId: draft.userId,
             categoryId: Value(draft.categoryId),
             goalId: Value(draft.goalId),
-            amount: draft.amount.toDouble(),
+            amount: draft.amount,
             note: Value(draft.note),
             transactionDate: draft.transactionDate,
             createdAt: draft.createdAt,

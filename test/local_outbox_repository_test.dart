@@ -18,7 +18,7 @@ void main() {
     required String id,
     String? categoryId = 'cat-1',
     String? goalId,
-    num amount = 50000,
+    int amount = 50000,
     DateTime? createdAt,
   }) {
     return OutboxDraft(
@@ -152,6 +152,106 @@ void main() {
       expect(items, hasLength(1));
       expect(items.single.id, id);
       expect(items.single.retryCount, 2);
+    });
+
+    group('exact amount preservation', () {
+      for (final amount in [1, 12345, 50000, 1000000, 123456789012]) {
+        test('$amount Rupiah round-trips exactly, not as an approximation', () async {
+          await repo.insertPending(draft(id: 'amount-$amount', amount: amount));
+
+          final item = await repo.findById('amount-$amount');
+          expect(item!.amount, amount);
+          expect(item.amount, isA<int>());
+        });
+      }
+    });
+
+    group('category/goal invariant', () {
+      test('category-only draft is valid', () {
+        expect(
+          () => draft(id: 'x', categoryId: 'cat-1', goalId: null),
+          returnsNormally,
+        );
+      });
+
+      test('goal-only draft is valid', () {
+        expect(
+          () => draft(id: 'x', categoryId: null, goalId: 'goal-1'),
+          returnsNormally,
+        );
+      });
+
+      test('both null is rejected at construction, never reaches storage', () {
+        expect(
+          () => OutboxDraft(
+            id: 'x',
+            userId: 'user-1',
+            categoryId: null,
+            goalId: null,
+            amount: 1000,
+            transactionDate: '2026-08-15',
+            createdAt: DateTime.utc(2026, 8, 15),
+          ),
+          throwsArgumentError,
+        );
+      });
+
+      test('both populated is rejected at construction, never reaches storage', () {
+        expect(
+          () => OutboxDraft(
+            id: 'x',
+            userId: 'user-1',
+            categoryId: 'cat-1',
+            goalId: 'goal-1',
+            amount: 1000,
+            transactionDate: '2026-08-15',
+            createdAt: DateTime.utc(2026, 8, 15),
+          ),
+          throwsArgumentError,
+        );
+      });
+
+      // These two bypass OutboxDraft entirely and write a raw Companion
+      // straight through the database, proving the CHECK constraint on
+      // LocalOutboxItems is a real backstop — not just documentation — for
+      // any future code path that doesn't go through OutboxDraft.
+      test('CHECK constraint rejects both-null at the SQL level', () async {
+        expect(
+          () => db
+              .into(db.localOutboxItems)
+              .insert(
+                LocalOutboxItemsCompanion.insert(
+                  id: 'raw-both-null',
+                  userId: 'user-1',
+                  amount: 1000,
+                  transactionDate: '2026-08-15',
+                  createdAt: DateTime.utc(2026, 8, 15),
+                  syncStatus: OutboxSyncStatus.pending,
+                ),
+              ),
+          throwsA(isA<SqliteException>()),
+        );
+      });
+
+      test('CHECK constraint rejects both-populated at the SQL level', () async {
+        expect(
+          () => db
+              .into(db.localOutboxItems)
+              .insert(
+                LocalOutboxItemsCompanion.insert(
+                  id: 'raw-both-populated',
+                  userId: 'user-1',
+                  categoryId: const Value('cat-1'),
+                  goalId: const Value('goal-1'),
+                  amount: 1000,
+                  transactionDate: '2026-08-15',
+                  createdAt: DateTime.utc(2026, 8, 15),
+                  syncStatus: OutboxSyncStatus.pending,
+                ),
+              ),
+          throwsA(isA<SqliteException>()),
+        );
+      });
     });
   });
 }

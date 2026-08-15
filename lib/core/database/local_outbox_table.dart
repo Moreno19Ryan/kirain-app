@@ -42,11 +42,15 @@ class LocalOutboxItems extends Table {
 
   TextColumn get goalId => text().nullable()();
 
-  /// Same units TransactionRepository already sends Supabase — full Rupiah,
-  /// not cents. This table is a delivery buffer, not the ledger of record
-  /// (Supabase's `numeric(14,2)` column stays authoritative once synced), so
-  /// REAL is precise enough for the values involved here.
-  RealColumn get amount => real()();
+  /// Exact whole Rupiah — the smallest currency unit KIRAIN's domain model
+  /// actually uses today (Catat's amount field is `decimal: false`; there's
+  /// no sen/cents concept anywhere in the app). Stored as an integer, not
+  /// REAL/double, so this durable local copy of a financial amount can't
+  /// drift from what the user typed through binary floating-point rounding.
+  /// Supabase's `numeric(14,2)` column stays authoritative once synced —
+  /// this is a delivery buffer, not the ledger of record — but that's not a
+  /// reason to be inexact here.
+  IntColumn get amount => integer()();
 
   TextColumn get note => text().nullable()();
 
@@ -76,4 +80,15 @@ class LocalOutboxItems extends Table {
 
   @override
   Set<Column> get primaryKey => {id};
+
+  /// Backstop for the "exactly one of categoryId/goalId" invariant.
+  /// [OutboxDraft]'s constructor already rejects a malformed draft before it
+  /// can reach the DAO (see local_outbox_repository.dart), but a CHECK here
+  /// means a malformed row can never be persisted even if some future code
+  /// path builds a Companion directly instead of going through OutboxDraft.
+  @override
+  List<String> get customConstraints => [
+    'CHECK ((category_id IS NOT NULL AND goal_id IS NULL) OR '
+        '(category_id IS NULL AND goal_id IS NOT NULL))',
+  ];
 }

@@ -8,6 +8,19 @@
 # The following line activates a set of recommended lints for Flutter apps,
 # packages, and plugins designed to encourage good coding practices.
 analyzer:
+  # NOT drift/project-specific, despite first appearing alongside the
+  # drift_dev dependency add. This is the Flutter SDK's own
+  # AnalysisOptionsMigration (packages/flutter_tools/lib/src/migrations/
+  # analysis_options_migration.dart) — an unconditional, self-healing
+  # migration the `flutter` tool applies to every Flutter project. It
+  # doesn't inspect what's actually inside android/ios/web/windows/macos/
+  # linux (this project's android/ and ios/ currently hold zero .dart
+  # files, and web/windows/macos/linux don't exist here at all); it exists
+  # so plugin-generated code that CAN land in those directories on some
+  # projects never gets analyzed. Manually narrowing this list was tried
+  # and reverted — any Flutter command that runs project migrations
+  # silently re-appends whatever's missing, so hand-editing it away doesn't
+  # stick and isn't a real fix to chase.
   exclude:
     - build/**
     - android/**
