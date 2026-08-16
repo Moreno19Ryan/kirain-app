@@ -28,6 +28,13 @@ enum SyncOutcome {
   /// duplicate" invariant — normally prevented from ever surfacing here by
   /// `upsert(..., ignoreDuplicates: true)`, but classified defensively in
   /// case a duplicate-key condition reaches this code some other way).
+  ///
+  /// Deliberately narrow: this is *specifically* "the transactions.id
+  /// primary key collided with this UUID", confirmed by inspecting which
+  /// column Postgres reports the conflict on — not "any unique violation
+  /// whatsoever". A violation naming some other constraint is a real data
+  /// problem, not this app's own idempotent-retry case, and must not be
+  /// silently treated as success.
   alreadySynced,
 }
 
@@ -61,8 +68,9 @@ SyncOutcome _classifyPostgrest(PostgrestException error) {
   // prefixed codes) — these come from a JSON error body the server
   // actually parsed and understood.
   switch (code) {
-    case '23505': // unique_violation: this UUID already exists server-side.
-      return SyncOutcome.alreadySynced;
+    case '23505': // unique_violation — only our own id conflict counts as
+      // already-synced; any other unique constraint is a genuine problem.
+      return _isIdConflict(error) ? SyncOutcome.alreadySynced : SyncOutcome.permanent;
     case '23503': // foreign_key_violation
     case '42501': // insufficient_privilege — RLS rejected the write
     case '22P02': // invalid_text_representation — malformed payload
@@ -90,7 +98,7 @@ SyncOutcome _classifyHttpStatus(String status, PostgrestException error) {
     case '401':
       return SyncOutcome.authRequired;
     case '409':
-      return _classifyConflict('${error.message} ${error.details ?? ''}');
+      return _classifyConflict(error);
   }
   return SyncOutcome.retryable;
 }
@@ -106,15 +114,31 @@ SyncOutcome _classifyAuthStatus(String? statusCode) {
 /// A 409 is never classified by status code alone (per ADR-002) — it can
 /// mean "this exact row already exists" (safe to treat as already-synced)
 /// or a genuine, unresolved conflict (not safe to silently resolve either
-/// way). Text-sniffing the actual PostgREST error is the only signal
-/// available without a second round-trip.
-SyncOutcome _classifyConflict(String description) {
-  final normalized = description.toLowerCase();
-  if (normalized.contains('duplicate') || normalized.contains('already exists')) {
-    return SyncOutcome.alreadySynced;
-  }
+/// way). Same [_isIdConflict] check as the 23505 case: only a confirmed
+/// conflict on `id` is our own idempotency case.
+SyncOutcome _classifyConflict(PostgrestException error) {
+  if (_isIdConflict(error)) return SyncOutcome.alreadySynced;
   // An unrecognized conflict shape: don't guess which side is right by
   // either retrying forever or silently discarding it. Park it in FAILED
   // so a human looks at it.
   return SyncOutcome.permanent;
+}
+
+/// Whether a unique-violation/conflict is specifically our own
+/// same-UUID-retried case — a duplicate on `transactions.id` — rather than
+/// some other unique constraint or an unrelated conflict.
+///
+/// Postgres reports which column(s) a unique violation collided on in the
+/// error's `details` field, in the fixed form `Key (id)=(...) already
+/// exists.` (or `Key ("id")=...` when quoted). That's the one signal
+/// precise enough to trust here — matching on words like "duplicate" in
+/// the free-text `message` can't tell "id already exists" apart from some
+/// other column already existing. Missing/unrecognized `details` is
+/// treated as *not* our case: this is a narrow, targeted fix for the known
+/// idempotent-retry scenario, not a general conflict-resolution system, so
+/// anything ambiguous falls back to `permanent` (FAILED, for a human to
+/// look at) rather than being guessed at.
+bool _isIdConflict(PostgrestException error) {
+  final details = error.details?.toString().toLowerCase() ?? '';
+  return RegExp(r'key\s*\(\s*"?id"?\s*\)').hasMatch(details);
 }

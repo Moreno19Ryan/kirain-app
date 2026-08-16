@@ -108,12 +108,21 @@ class LocalOutboxRepository {
         .get();
   }
 
-  /// Same as [pendingItems] but bounded — SyncWorker processes one small,
-  /// deterministically-ordered batch per pass rather than an unbounded scan,
-  /// so a queue with many items can't stall a single sync attempt.
-  Future<List<LocalOutboxItem>> eligibleBatch({required int limit}) {
+  /// Same as [pendingItems] but bounded and scoped to one user — SyncWorker
+  /// processes one small, deterministically-ordered batch per pass rather
+  /// than an unbounded scan, so a queue with many items can't stall a
+  /// single sync attempt.
+  ///
+  /// [userId] must be the *currently authenticated* user — filtering here,
+  /// not just trusting the caller to only claim what it means to, is what
+  /// guarantees a session can never even see (let alone claim and send) a
+  /// row that belongs to somebody else. Relevant on a shared device: if
+  /// user A queues a transaction offline, then logs out and user B logs in
+  /// before A's item ever synced, A's row simply never enters B's session's
+  /// eligible batch — it stays untouched in PENDING until A signs back in.
+  Future<List<LocalOutboxItem>> eligibleBatch({required int limit, required String userId}) {
     return (_db.select(_db.localOutboxItems)
-          ..where((t) => t.syncStatus.equalsValue(OutboxSyncStatus.pending))
+          ..where((t) => t.syncStatus.equalsValue(OutboxSyncStatus.pending) & t.userId.equals(userId))
           ..orderBy([(t) => OrderingTerm.asc(t.createdAt)])
           ..limit(limit))
         .get();

@@ -60,10 +60,10 @@ void main() {
 
   tearDown(() => db.close());
 
-  OutboxDraft draft({required String id, DateTime? createdAt}) {
+  OutboxDraft draft({required String id, DateTime? createdAt, String userId = 'user-1'}) {
     return OutboxDraft(
       id: id,
-      userId: 'user-1',
+      userId: userId,
       categoryId: 'cat-1',
       amount: 50000,
       transactionDate: '2026-08-15',
@@ -197,8 +197,11 @@ void main() {
         // violation.
         await outbox.insertPending(draft(id: 'x'));
         final sync = _FakeSyncService(
-          (item, n) =>
-              PostgrestException(message: 'duplicate key value violates unique constraint', code: '23505'),
+          (item, n) => PostgrestException(
+            message: 'duplicate key value violates unique constraint "transactions_pkey"',
+            code: '23505',
+            details: 'Key (id)=(${item.id}) already exists.',
+          ),
         );
         final worker = buildWorker(sync);
 
@@ -254,14 +257,36 @@ void main() {
       expect(await outbox.findById('x'), isNull); // synced this time
     });
 
-    test('a 409 classified as already-synced by content deletes rather than fails', () async {
+    test('a 409 confirmed as an id conflict deletes rather than fails', () async {
       await outbox.insertPending(draft(id: 'x'));
-      final sync = _FakeSyncService((item, n) => PostgrestException(message: 'Key (id) already exists.', code: '409'));
+      final sync = _FakeSyncService(
+        (item, n) => PostgrestException(
+          message: 'duplicate key value violates unique constraint "transactions_pkey"',
+          code: '409',
+          details: 'Key (id)=(${item.id}) already exists.',
+        ),
+      );
       final worker = buildWorker(sync);
 
       await worker.processQueue();
 
       expect(await outbox.findById('x'), isNull);
+    });
+
+    test('a unique violation on a different column is FAILED, not silently treated as synced', () async {
+      await outbox.insertPending(draft(id: 'x'));
+      final sync = _FakeSyncService(
+        (item, n) => PostgrestException(
+          message: 'duplicate key value violates unique constraint "transactions_some_other_key"',
+          code: '23505',
+          details: 'Key (idempotency_token)=(abc) already exists.',
+        ),
+      );
+      final worker = buildWorker(sync);
+
+      await worker.processQueue();
+
+      expect((await outbox.findById('x'))!.syncStatus, OutboxSyncStatus.failed);
     });
 
     test('a 401 defers to PENDING after exactly one attempt, spending no backoff budget', () async {
@@ -340,6 +365,68 @@ void main() {
 
       expect(sync.totalCalls, 0);
       expect((await outbox.findById('x'))!.syncStatus, OutboxSyncStatus.syncing);
+    });
+
+    group('user ownership (login/logout identity boundary)', () {
+      test("processQueue never sends another user's item, even if it's the only one pending", () async {
+        await outbox.insertPending(draft(id: 'a-item', userId: 'user-A'));
+        final sync = _FakeSyncService((item, n) => null);
+        // Session B is signed in — A's item must not enter B's batch.
+        final worker = buildWorker(sync, currentUserId: () => 'user-B');
+
+        await worker.processQueue();
+
+        expect(sync.totalCalls, 0);
+        expect((await outbox.findById('a-item'))!.syncStatus, OutboxSyncStatus.pending);
+      });
+
+      test('a batch only ever contains the current session\'s own items', () async {
+        await outbox.insertPending(draft(id: 'a-item', userId: 'user-A', createdAt: DateTime.utc(2026, 8, 15, 9)));
+        await outbox.insertPending(draft(id: 'b-item', userId: 'user-B', createdAt: DateTime.utc(2026, 8, 15, 10)));
+        final sync = _FakeSyncService((item, n) => null);
+        final worker = buildWorker(sync, currentUserId: () => 'user-B');
+
+        await worker.processQueue();
+
+        expect(sync.receivedIds, ['b-item']);
+        expect((await outbox.findById('a-item'))!.syncStatus, OutboxSyncStatus.pending); // untouched
+        expect(await outbox.findById('b-item'), isNull); // synced & deleted
+      });
+
+      test('logging back in as the original user lets their own item sync normally', () async {
+        await outbox.insertPending(draft(id: 'a-item', userId: 'user-A'));
+        final sync = _FakeSyncService((item, n) => null);
+
+        // User B's session first: A's item is skipped entirely.
+        await buildWorker(sync, currentUserId: () => 'user-B').processQueue();
+        expect(sync.totalCalls, 0);
+
+        // A signs back in: now it's eligible and gets synced.
+        await buildWorker(sync, currentUserId: () => 'user-A').processQueue();
+        expect(sync.receivedIds, ['a-item']);
+        expect(await outbox.findById('a-item'), isNull);
+      });
+
+      test("manual retry refuses to act on another user's FAILED item", () async {
+        await outbox.insertPending(draft(id: 'a-item', userId: 'user-A'));
+        await outbox.markFailed('a-item', errorMessage: 'boom');
+        final sync = _FakeSyncService((item, n) => null);
+        final worker = buildWorker(sync, currentUserId: () => 'user-B');
+
+        await worker.retryFailedItem('a-item');
+
+        expect(sync.totalCalls, 0);
+        expect((await outbox.findById('a-item'))!.syncStatus, OutboxSyncStatus.failed); // untouched
+      });
+
+      test('manual retry on a nonexistent item is a harmless no-op', () async {
+        final sync = _FakeSyncService((item, n) => null);
+        final worker = buildWorker(sync, currentUserId: () => 'user-B');
+
+        await worker.retryFailedItem('does-not-exist');
+
+        expect(sync.totalCalls, 0);
+      });
     });
   });
 }

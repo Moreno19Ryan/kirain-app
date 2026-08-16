@@ -20,10 +20,11 @@ void main() {
     String? goalId,
     int amount = 50000,
     DateTime? createdAt,
+    String userId = 'user-1',
   }) {
     return OutboxDraft(
       id: id,
-      userId: 'user-1',
+      userId: userId,
       categoryId: goalId == null ? categoryId : null,
       goalId: goalId,
       amount: amount,
@@ -333,6 +334,35 @@ void main() {
 
         final item = await repo.findById('x');
         expect(item!.syncStatus, OutboxSyncStatus.pending);
+      });
+    });
+
+    group('eligibleBatch user scoping (Tech Lead review: OFFLINE-002)', () {
+      test('only returns items belonging to the requested user', () async {
+        await repo.insertPending(draft(id: 'a-item', userId: 'user-A'));
+        await repo.insertPending(draft(id: 'b-item', userId: 'user-B'));
+
+        final batch = await repo.eligibleBatch(limit: 10, userId: 'user-B');
+
+        expect(batch.map((e) => e.id).toList(), ['b-item']);
+      });
+
+      test('a user with no pending items gets an empty batch, not another user\'s', () async {
+        await repo.insertPending(draft(id: 'a-item', userId: 'user-A'));
+
+        final batch = await repo.eligibleBatch(limit: 10, userId: 'user-B');
+
+        expect(batch, isEmpty);
+      });
+
+      test('respects the limit within one user\'s scope, still oldest-first', () async {
+        await repo.insertPending(draft(id: 'a1', userId: 'user-A', createdAt: DateTime.utc(2026, 8, 15, 9)));
+        await repo.insertPending(draft(id: 'a2', userId: 'user-A', createdAt: DateTime.utc(2026, 8, 15, 10)));
+        await repo.insertPending(draft(id: 'b1', userId: 'user-B', createdAt: DateTime.utc(2026, 8, 15, 8)));
+
+        final batch = await repo.eligibleBatch(limit: 1, userId: 'user-A');
+
+        expect(batch.map((e) => e.id).toList(), ['a1']);
       });
     });
   });

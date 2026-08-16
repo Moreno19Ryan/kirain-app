@@ -100,8 +100,15 @@ class SyncWorker {
   /// FAILED -> PENDING for one item, then a normal processQueue() pass —
   /// the "manual retry" trigger. User-initiated, so no lease/claim
   /// reasoning needed for the transition itself (see
-  /// [LocalOutboxRepository.retryFailed]).
+  /// [LocalOutboxRepository.retryFailed]) — but ownership still is: refuses
+  /// to touch an item that isn't the current session's own, same as
+  /// [_processBatch]. A no-op (not an error) if the item is missing or
+  /// belongs to someone else, since neither is something the caller should
+  /// be able to distinguish from "already handled".
   Future<void> retryFailedItem(String id) async {
+    final item = await _outbox.findById(id);
+    if (item == null || item.userId != _currentUserId()) return;
+
     await _outbox.retryFailed(id);
     await processQueue();
   }
@@ -123,13 +130,20 @@ class SyncWorker {
   }
 
   Future<void> _processBatch() async {
+    final userId = _currentUserId();
     // Nothing to sync on behalf of nobody: RLS would just reject every
     // request as an anonymous/expired-session write. Skip the batch
     // entirely rather than burning retry budget on requests that can't
     // possibly succeed yet.
-    if (_currentUserId() == null) return;
+    if (userId == null) return;
 
-    final items = await _outbox.eligibleBatch(limit: batchSize);
+    // Scoped to the *current* session's own rows — never another user's.
+    // On a shared device where user A queued something offline and user B
+    // is now signed in, A's still-pending item simply isn't in this batch;
+    // it stays untouched until A is signed in again. See
+    // [LocalOutboxRepository.eligibleBatch] for why this is a query filter,
+    // not a post-fetch check.
+    final items = await _outbox.eligibleBatch(limit: batchSize, userId: userId);
     for (final item in items) {
       await _processItem(item);
     }
