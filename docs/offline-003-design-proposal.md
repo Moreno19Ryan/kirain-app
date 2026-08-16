@@ -1,11 +1,33 @@
 # OFFLINE-003 — Local-First Transaction Integration: Design Proposal
 
-> Status: **PROPOSAL — NOT APPROVED, NOT IMPLEMENTED.** No OFFLINE-003 code has been
-> written. This document exists to be reviewed and approved by the Tech Lead before
-> any implementation begins, per Sprint 0 process.
+> Status: **APPROVED WITH CONDITIONS (round 1) → revised below → awaiting final
+> sign-off.** No OFFLINE-003 code has been written. This revision addresses the
+> four required corrections from the round-1 review (§2, §4, §5/§7, §9 — each
+> marked **[Round 2 correction]** at the affected section). Nothing will be
+> implemented until final sign-off on this revision.
 >
 > Builds on: ADR-001 (client-generated UUID v4 + local outbox), ADR-002 (foreground
 > sync engine — PR #41, #42, #43, all merged).
+
+## Round 1 → Round 2 changelog
+
+Round 1 approved decisions (unchanged, restated for the record):
+1. Two tables: `LocalTransactions` (display) + `LocalOutboxItems` (delivery).
+2. Both rows written in one atomic Drift transaction.
+3. UUID generated exactly once in Catat, reused by `LocalTransactions`,
+   `LocalOutboxItems`, and Supabase.
+4. OFFLINE-003 covers Catat only — Savings Goal and Recurring stay direct-to-Supabase.
+5. Offline edit/delete stays V2.
+6. Double-tap protection is now in scope (was an open question in round 1).
+
+Round 1 required corrections, addressed in this revision:
+- **A.** Feed merge must be deterministically ID-deduplicated, not assumed
+  non-overlapping — see §4, new invariant + three new test cases.
+- **B.** Dashboard aggregate top-up is deferred out of OFFLINE-003 entirely — see
+  §4, race-window reasoning, and the new follow-up placeholder.
+- **C.** FAILED is explicitly a delivery state, not a deletion trigger — see §5/§7.
+- **D.** Double-tap gets a synchronous submission guard, before any async work —
+  see §9.
 
 ---
 
@@ -79,14 +101,12 @@ state where one row exists without the other. This is the direct answer to "in
 one atomic Drift transaction": it's not two independent writes hoping to land
 together, it's one SQL transaction.
 
-**Alternative considered and rejected:** reuse `LocalOutboxItems` alone as the
-display source (no second table), since it already has every display field.
-Rejected because it would mean the UI reads a table whose primary purpose is
-sync bookkeeping (mixing concerns), and because keeping a `LocalTransactions`
-row until sync completes gives a clean "does this id still have a local-only
-row?" existence check for `SyncWorker` cleanup, rather than needing to infer
-display state from delivery state. Flagging this as a real fork — happy to
-revisit if Tech Lead prefers the single-table version.
+**[Round 1 decision — approved as proposed.]** The alternative (reusing
+`LocalOutboxItems` alone as the display source, no second table) was considered
+and is not used: it would mean the UI reads a table whose primary purpose is
+sync bookkeeping (mixing concerns), and a separate `LocalTransactions` row
+gives a clean "does this id still have a local-only row?" existence check for
+cleanup, rather than inferring display state from delivery state.
 
 Symmetric cleanup: `SyncWorker`'s existing success path (`deleteSynced`) is
 extended to delete the matching `LocalTransactions` row in the same
@@ -121,30 +141,79 @@ not a full local-first read architecture (that's a much bigger change than
 what's being asked here, and V1 doesn't need it — only the *not-yet-synced*
 gap needs covering).
 
-- New method, e.g. `TransactionRepository.fetchHistoryWithPending(...)`: fetches
-  the normal Supabase page/range, **and** queries `LocalTransactions` for rows
-  in the same date range belonging to the current user (§9), and merges them —
-  pending rows sorted in alongside synced ones by `transaction_date`/`created_at`,
-  same as today's ordering.
-- De-duplication is structural, not best-effort: a `LocalTransactions` row is
-  deleted (§2) in the same atomic step that deletes its `LocalOutboxItems` row
-  on sync success, so by the time a synced transaction would start appearing in
-  a fresh Supabase fetch, its local echo is already gone. There's no window
-  where both a local and a server copy of the same id are live long enough to
-  double-render (SyncWorker's delete happens before that HTTP response is even
-  returned to its caller).
-- Dashboard aggregates (Zona Aman/Kirain progress, "Progress Cukup") are
-  Supabase RPC-calculated today. This proposal adds a client-side top-up: after
-  fetching the RPC's totals, add in `LocalTransactions` amounts for the current
-  budget cycle before rendering the progress bar. **Flagging this as the
-  trickiest part of the design** — it needs the exact same cycle-boundary logic
-  the RPC uses (`BudgetCycle.current`, already in `lib/core/utils`), and it's
-  the one place a bug would show wrong numbers rather than just a stale badge.
-  Worth a focused review pass on its own once this proposal is approved.
+### 4.1 Feed merge — **[Round 2 correction A]**
+
+Round 1 assumed the local/Supabase result sets never temporally overlap
+(local row deleted before the synced row could appear in a fetch). Correct
+per Tech Lead review: don't rely on that assumption holding under a real race
+(e.g. `SyncWorker` marks a row synced and starts its delete, but a concurrent
+Rekap fetch's Supabase call and local query interleave around it). The merge
+must be **deterministically keyed by `transaction.id`**, not "shouldn't
+overlap in practice."
+
+**Invariant:** the same `transaction.id` must never produce two rendered rows
+in the merged feed, regardless of ordering or timing between the Supabase
+fetch and the local query.
+
+**Algorithm** (`TransactionRepository.fetchHistoryWithPending(...)`):
+1. Fetch the normal Supabase page/range → list `A`.
+2. Query `LocalTransactions` for the same date range, current user (§9) → list `B`.
+3. Build the merged result keyed by `id`: start from a `Map<String, Transaction>`
+   populated from `A`, then add each item from `B` **only if its `id` is not
+   already a key** — i.e. Supabase's copy wins on overlap, never the local one.
+   Supabase's row is the confirmed, server-authoritative version (real
+   `created_at`, guaranteed post-RLS-write state); the local row's only job is
+   to fill the gap *before* that confirmation exists.
+4. Sort the merged map's values by `transaction_date`/`created_at`, same
+   ordering as today.
+
+This makes de-duplication a property of the merge algorithm itself, not a
+timing assumption about when `SyncWorker` happens to delete things.
+
+**New tests for the race/overlap case** (added to the Definition of Done table
+below too):
+- Transaction present in `LocalTransactions` only (not yet synced) → renders once, "belum tersinkron".
+- Transaction present in the Supabase result only (already synced, local row already cleaned up) → renders once, no badge.
+- Transaction present in **both** (the race: synced server-side, but the local row hasn't been cleaned up yet by the time this fetch ran) → renders **exactly once**, using the Supabase copy, no badge — proving the invariant holds under overlap, not just in the clean-sequential case.
+
+### 4.2 Dashboard aggregate top-up — **[Round 2 correction B, deferred]**
+
+Round 1 proposed adding `LocalTransactions` amounts client-side on top of the
+Supabase RPC's Zona Aman/Kirain totals. **Removed from OFFLINE-003 scope per
+Tech Lead review**: a client-side top-up has its own race window — if a sync
+completes *during* an aggregate fetch, the pending amount could get added on
+top of a total that the RPC had already started including server-side (or
+vice versa, dropped from both), producing a double-count or undercount that's
+strictly worse than "stale for a moment."
+
+**For OFFLINE-003:** dashboard aggregates keep using the existing Supabase RPC
+as the sole source, unchanged. This means a just-recorded transaction shows up
+in Rekap/Home's list immediately (§4.1) but does **not** move the Zona Aman/
+Kirain progress bar until it actually syncs. That gap is an accepted, explicit
+limitation of this PR — not silently glossed over.
+
+**Follow-up placeholder:** local financial aggregate consistency (making the
+progress bar reflect pending amounts safely) is deferred to a separate,
+later design task — call it OFFLINE-004 — scoped and reviewed on its own once
+OFFLINE-003 has shipped and the merge pattern above has been proven in
+production.
 
 ---
 
 ## 5. Showing PENDING/FAILED transactions to the user
+
+**[Round 2 correction C]** Stating explicitly, per Tech Lead review: **FAILED
+is a delivery state on `LocalOutboxItems`, not a deletion trigger for
+`LocalTransactions`.** Moving to FAILED changes only `LocalOutboxItems.
+sync_status` (via the existing `markFailed`, OFFLINE-002) — it never touches
+`LocalTransactions`. The user's local record of "I made this transaction"
+persists, visibly, through PENDING → SYNCING → FAILED → (manual retry) →
+PENDING → ... for as many cycles as it takes. The **only** thing that deletes
+a `LocalTransactions` row is confirmed server sync (`deleteSynced`, §2/§8) —
+never a failure, no matter how permanent the classifier says it is. A
+transaction the user recorded does not disappear because the network or a
+validation rule rejected it; it stays visible and retriable until it's
+actually on the server.
 
 Per CLAUDE.md's own existing spec ("indikator kecil 'belum tersinkron'"):
 
@@ -184,10 +253,11 @@ Reuses OFFLINE-002's classifier outcomes as-is, mapped to the badge (§5):
 - **Retryable** (network/429/5xx): stays "belum tersinkron" through the
   existing backoff loop; user unaffected functionally.
 - **Permanent** (validation/RLS/FK/malformed payload): → FAILED → "Gagal
-  disinkron" badge, user can tap to retry manually. This is new user-visible
-  surface area — today a permanent failure is invisible (item just sits in the
-  outbox forever). Making it visible is this proposal's answer to OFFLINE-002's
-  "known limitation #3."
+  disinkron" badge, user can tap to retry manually. Per §5's correction: this
+  is a delivery-state change only — the `LocalTransactions` row is untouched
+  and stays visible. This is new user-visible surface area — today a permanent
+  failure is invisible (item just sits in the outbox forever). Making it
+  visible is this proposal's answer to OFFLINE-002's "known limitation #3."
 - **authRequired** (401): indistinguishable from "still syncing" to the user —
   same "belum tersinkron" badge, resolves automatically once the session's
   valid again, no special UI.
@@ -217,13 +287,41 @@ mechanism needed, just correct composition of what's already built:
   `LocalOutboxItems` — a genuine duplicate write with the same id is
   structurally impossible (constraint violation), the same guarantee OFFLINE-001
   already established for the outbox alone.
-- Real remaining risk: a double-tap on "Oke, Catat" before the button disables,
-  which would call `newId()` twice and create two *different* legitimate-looking
+- **[Round 2 correction D — now in scope, not optional.]** Real remaining risk:
+  a double-tap on "Oke, Catat" before the button visually disables, which would
+  call `newId()` twice and create two *different* legitimate-looking
   transactions — not a same-id duplicate, a UX double-submission bug. This
-  exists today in the direct-to-Supabase flow too; not new to this proposal.
-  Recommended fix (small, separable): disable the submit button synchronously
-  on tap, before any async work starts. Happy to fold into OFFLINE-003 or keep
-  as its own tiny follow-up — Tech Lead's call.
+  exists today in the direct-to-Supabase flow too, but is being fixed as part
+  of OFFLINE-003 rather than deferred.
+
+  **Design:** a synchronous guard checked and set *before* any `await` in the
+  submit handler — not `setState` (which schedules a rebuild; the disabled
+  visual state can lag a frame behind, leaving a real re-entrancy window), and
+  not a `Future`-based lock (same problem: the check-and-set has to happen on
+  the same synchronous tick as the tap, before the event loop yields to
+  anything else).
+
+  ```dart
+  bool _isSubmitting = false; // plain field, not part of build state
+
+  Future<void> _onSubmitTap() async {
+    if (_isSubmitting) return;   // synchronous check
+    _isSubmitting = true;        // synchronous set — both on the same tick,
+                                  // before the first `await` below
+    try {
+      final id = newId();
+      await _localFirst.recordTransaction(id: id, /* ... */);
+      // ...optimistic success UI, trigger sync...
+    } finally {
+      _isSubmitting = false;
+    }
+  }
+  ```
+
+  A second tap that lands before the first `await` yields sees `_isSubmitting
+  == true` synchronously and returns immediately — no second `newId()`, no
+  second write, regardless of how long the async work underneath takes or how
+  fast the two taps arrive.
 - The existing soft duplicate check (`hasPossibleDuplicate` — same category/
   amount/day, non-blocking warning) is unrelated and unaffected — it's a UX
   nudge against re-entering the same real-world expense, not an identity check.
@@ -282,20 +380,54 @@ Mapped 1:1 to the Tech Lead's required list:
 | Supabase response lost after server commit | Extends OFFLINE-002's existing `alreadySynced`/23505-on-id test — confirm the `LocalTransactions` row is also cleaned up in that path, not just the outbox row |
 | User ownership boundary | Merge query filters `LocalTransactions` by current `userId` — test that user A's pending row never appears in user B's fetched feed, mirroring OFFLINE-002's `eligibleBatch` ownership tests |
 | UI optimistic/local state | Widget test: Rekap/Home render "belum tersinkron"/"Gagal disinkron" based on outbox presence/status, and the badge disappears once the row is gone (synced) |
+| **[Round 2 — §4.1 correction A]** Feed merge dedup, local-only | Item only in `LocalTransactions` → renders once, "belum tersinkron" |
+| **[Round 2 — §4.1 correction A]** Feed merge dedup, Supabase-only | Item only in the Supabase result (already cleaned up locally) → renders once, no badge |
+| **[Round 2 — §4.1 correction A]** Feed merge dedup, overlap/race | Item present in **both** simultaneously → renders **exactly once**, using the Supabase copy — the invariant test |
+| **[Round 2 — §5/§7 correction C]** FAILED does not delete `LocalTransactions` | Force a permanent-error classification → `LocalOutboxItems.sync_status == failed`, `LocalTransactions` row still present and still fetchable |
+| **[Round 2 — §9 correction D]** Double-tap guard | Two synchronous, back-to-back calls to the submit handler (no `await` between them in the test) → only one `LocalTransactions`/`LocalOutboxItems` row pair created |
 
 ---
 
-## Open questions for Tech Lead
+## Final design summary
 
-1. **Two-table vs. one-table** (§2): confirm `LocalTransactions` +
-   `LocalOutboxItems` as separate tables, or prefer reusing `LocalOutboxItems`
-   alone for display?
-2. **Dashboard aggregate top-up** (§4): confirm client-side merge of pending
-   local amounts into the RPC-calculated Zona Aman/Kirain totals is the right
-   call, given it's the part most likely to show a wrong number if buggy.
-3. **Goals/Recurring scope** (§10): confirm staying out of scope for OFFLINE-003
-   is correct, or should either be pulled in now?
-4. **Double-tap submit guard** (§9): fold into this PR, or a separate tiny
-   follow-up?
+Catat switches from a synchronous direct-to-Supabase write to a local-first
+write: one `newId()`, one atomic Drift transaction inserting matching
+`LocalTransactions` (display) + `LocalOutboxItems` (delivery, existing table)
+rows, immediate optimistic UI, fire-and-forget sync trigger. Rekap/Home read
+through a new ID-keyed, Supabase-wins-on-overlap merge (§4.1) that provably
+never double-renders a transaction. Dashboard aggregates are explicitly **not**
+touched in this PR (§4.2, deferred to a future OFFLINE-004). FAILED is
+delivery-only and never deletes the user's local record (§5/§7). A synchronous
+(non-`setState`, non-`Future`-based) submission guard prevents double-tap
+double-writes (§9). Savings Goal and Recurring stay on the existing direct
+path; offline edit/delete stays V2; no Supabase schema changes.
 
-No implementation will begin until this is reviewed and approved.
+## Affected files
+
+**New:**
+- `lib/core/database/local_transactions_table.dart` — the `LocalTransactions` Drift table.
+- `lib/core/sync/local_first_transaction_service.dart` — `recordTransaction()`, the atomic write (§2).
+- Drift schema v3 migration in `lib/core/database/kirain_database.dart` (adds `LocalTransactions`, same `onUpgrade` pattern as v1→v2).
+
+**Modified:**
+- `lib/features/catat/catat_screen.dart` — submit handler switches to `LocalFirstTransactionService`; adds the synchronous double-tap guard (§9).
+- `lib/features/transactions/data/transaction_repository.dart` — adds `fetchHistoryWithPending(...)` (§4.1); existing `addTransaction`/`addSavingsContribution`/`fetchHistory`/`fetchInRange` untouched.
+- `lib/core/sync/sync_worker.dart` — success path (`deleteSynced`) extended to also delete the matching `LocalTransactions` row, in the same atomic transaction (§2/§8). No change to the FAILED/retryable paths (§5/§7 correction C — deliberately not touching `LocalTransactions` there).
+- `lib/features/rekap/rekap_screen.dart`, `lib/features/home/home_screen.dart` (or their data providers) — switch to the merged fetch; render the "belum tersinkron"/"Gagal disinkron" badges (§5).
+
+**Not touched:** `lib/features/goals/data/savings_goal_repository.dart`, `lib/features/recurring/data/recurring_transaction_repository.dart` (§10), any Supabase migration under `supabase/migrations/`, `handle_new_user()`.
+
+## Migration plan
+
+1. Add the `LocalTransactions` table + schema v3 migration, `LocalFirstTransactionService`, and the extended `SyncWorker` cleanup — additive, no existing call site changes yet.
+2. Switch Catat's submit handler to the new service (§1) + add the double-tap guard (§9). This is the one behavior-changing step for the write path.
+3. Add `fetchHistoryWithPending(...)` and switch Rekap/Home's read providers to it (§4.1); add the sync-status badges (§5).
+4. `TransactionRepository.addTransaction`/`.addSavingsContribution` remain in place, still used by Goals/Recurring — no removal, no deprecation in this PR.
+5. Manual QA gate before calling this "done" (matching this project's existing pattern for physical-device checks): confirm on a real device that offline-created transactions appear immediately, sync once connectivity returns, and a forced permanent failure shows the FAILED badge and retries correctly on tap.
+
+## Test plan
+
+See the Definition of Done table above — 10 original cases plus the 5 new
+Round 2 cases (feed-merge dedup ×3, FAILED-doesn't-delete, double-tap guard).
+
+**Awaiting final Tech Lead sign-off. No implementation until then.**
