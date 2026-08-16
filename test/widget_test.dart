@@ -408,6 +408,61 @@ void main() {
     },
   );
 
+  testWidgets(
+    'catat form still shows success (not "gagal kesimpen") when the sync trigger fails after a successful '
+    'local-first save, and records the transaction exactly once (OFFLINE-INTEGRATION-001 Finding 1)',
+    (tester) async {
+      const wajibCategory = Category(
+        id: 'w1',
+        name: 'Makan & Minum',
+        kind: CategoryKind.expense,
+        expenseType: ExpenseType.wajib,
+      );
+
+      final db = KirainDatabase(NativeDatabase.memory());
+      addTearDown(db.close);
+      final outbox = LocalOutboxRepository(db);
+
+      _growTestSurface(tester);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            categoriesProvider.overrideWith((ref) async => const [wajibCategory]),
+            transactionRepositoryProvider.overrideWithValue(_NoOpDuplicateCheckRepository()),
+            localFirstTransactionServiceProvider.overrideWithValue(
+              LocalFirstTransactionService(outbox, currentUserId: () => 'user-1'),
+            ),
+            // Simulates the exact failure mode Finding 1 describes: reading
+            // `syncWorkerProvider` (what `triggerSyncAfterOutboxInsertion`
+            // does right after the local-first write succeeds) throws
+            // synchronously, as it would in production if the provider's
+            // construction chain failed for any reason.
+            syncWorkerProvider.overrideWith((ref) => throw StateError('simulated trigger failure')),
+          ],
+          child: const MaterialApp(home: CatatScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.widgetWithText(TextFormField, 'Jumlah (Rp)'), '20000');
+      await tester.tap(find.text('Makan & Minum'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Oke, Catat'));
+      await tester.pumpAndSettle();
+
+      // The save must read as a success — the sync-trigger failure must not
+      // be misreported as a save failure.
+      expect(find.textContaining('Tercatat!'), findsOneWidget);
+      expect(find.textContaining('gagal kesimpen'), findsNothing);
+
+      // And the local-first write itself must have happened exactly once —
+      // a trigger failure must not cause (or mask) a duplicate write.
+      final recorded = await outbox.pendingItems();
+      expect(recorded, hasLength(1));
+    },
+  );
+
   testWidgets('home dashboard flags Zona Kirain when spending is over the limit', (
     tester,
   ) async {

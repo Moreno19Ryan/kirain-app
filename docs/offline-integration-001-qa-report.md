@@ -3,14 +3,39 @@
 > Audit of the complete transaction pipeline on `main` as of merge commit `e62ea5c`
 > (Catat → LocalTransactions + Outbox atomic write → Rekap optimistic overlay →
 > Sync Worker → Supabase → cleanup), covering OFFLINE-001/002/003 combined.
-> No code was changed to produce this report. Findings below propose the
-> smallest fix where relevant; none have been implemented pending Tech Lead
-> decision.
+
+## Status update — Tech Lead review round 1
+
+Findings 1 and 2 are **fixed**, per explicit Tech Lead direction (approved as
+an audit, changes requested before merge, scoped to exactly these two).
+Findings 3–6 remain documented below as follow-ups/accepted limitations —
+**not implemented in this PR**, per instruction. OFFLINE-004 has not been
+started.
+
+- **Finding 1 (sync-trigger vs save-status coupling) — FIXED.**
+  `catat_screen.dart`'s `_doSubmit` now isolates `triggerSyncAfterOutboxInsertion`
+  in its own `try/catch`, after the local-first write has already succeeded —
+  a trigger failure can no longer fall through to the outer `catch` and get
+  misreported as "gagal kesimpen". Regression test added to `widget_test.dart`
+  (simulates the trigger's provider construction throwing synchronously,
+  asserts the success state still renders, no error text appears, and the
+  outbox contains exactly one row — proving no duplicate write). Verified
+  failing without the fix, passing with it.
+- **Finding 2 (Rekap pagination id-dedup) — FIXED.** `rekap_screen.dart`
+  now tracks a `Set<String> _renderedIds` alongside `_items`; `_loadMore`
+  only appends a fetched row if its id hasn't already been rendered,
+  preserving fetch order and leaving `_syncedCount`/`_hasMore`'s pagination
+  math untouched. Regression test added to `rekap_screen_test.dart`
+  (scripts a page-0/page-1 fetch pair that deliberately re-returns an
+  already-rendered id, simulating a pending item syncing mid-scroll and
+  shifting Supabase's true offset ordering; asserts the shared id renders
+  exactly once). Verified failing without the fix, passing with it.
 
 ## 0. Baseline
 
-- `flutter analyze` — **0 issues**.
-- `flutter test` — **193/193 passing**.
+- `flutter analyze` — **0 issues** (unchanged after the fixes).
+- `flutter test` — **195/195 passing** (193 + the 2 new regression tests
+  above; all pre-existing tests still green, no regressions from the fixes).
 - Reviewed files: `catat_screen.dart`, `local_first_transaction_service.dart`,
   `local_outbox_repository.dart`, `local_outbox_table.dart`,
   `local_transactions_table.dart`, `kirain_database.dart`, `sync_worker.dart`,
@@ -27,7 +52,7 @@ boundary. Only **Finding 1** meets that bar in my judgment; the rest are
 lower-priority or informational. No fixes have been applied — proposals are
 included only to make a go/no-go decision fast.
 
-### Finding 1 — MEDIUM: a sync-trigger failure can be misreported as "save failed"
+### Finding 1 — MEDIUM: a sync-trigger failure can be misreported as "save failed" — ✅ FIXED
 
 **Where:** `lib/features/catat/catat_screen.dart`, `_doSubmit()`, lines ~160–182.
 
@@ -61,12 +86,19 @@ structural coupling bug regardless of how rare the trigger itself fails: a
 concern about *delivery* is currently able to overwrite the UI's signal about
 *whether the save happened*, which are two different facts.
 
-**Proposed smallest fix (not applied):** move `triggerSyncAfterOutboxInsertion(ref)`
-out of the block whose `catch` sets `_errorMessage`, or wrap it in its own
-`try { ... } catch (_) {}` right at the call site — one line, no behavior
-change to the sync trigger itself, no change to any other code path.
+**Fix applied:** `triggerSyncAfterOutboxInsertion(ref)` is now wrapped in its
+own `try { ... } catch (_) {}` right at the call site, after the local-first
+write's `await` has already completed. A failure there can no longer reach
+the outer `catch` that sets `_errorMessage`. **Regression test:**
+`widget_test.dart` — *"catat form still shows success (not 'gagal kesimpen')
+when the sync trigger fails after a successful local-first save..."* —
+overrides `syncWorkerProvider` to throw synchronously (reproducing the exact
+failure mode) and asserts (a) the success state still renders, (b) no
+"gagal kesimpen" text appears, and (c) the outbox contains exactly one row
+(no duplicate write). Confirmed this test fails on the pre-fix code and
+passes on the fix.
 
-### Finding 2 — MEDIUM: no id-dedup guard when appending Rekap pages, risking a duplicate row across pages
+### Finding 2 — MEDIUM: no id-dedup guard when appending Rekap pages, risking a duplicate row across pages — ✅ FIXED
 
 **Where:** `lib/features/rekap/rekap_screen.dart`, `_loadMore()`,
 `_items.addAll(page)`.
@@ -92,10 +124,21 @@ than a rare theoretical case: submitting a transaction now reliably triggers
 a same-session sync moments later, and Rekap is the screen most likely to be
 open right after Catat.
 
-**Proposed smallest fix (not applied):** dedupe by id on append —
-`_items.addAll(page.where((i) => _items.every((existing) => existing.id != i.id)))`,
-or track a `Set<String>` of seen ids alongside `_items`. Small, local,
-doesn't touch `fetchHistoryWithPending`.
+**Fix applied:** `_RekapScreenState` now tracks a `Set<String> _renderedIds`
+alongside `_items`, cleared together on `reset: true`. `_loadMore` appends a
+fetched row only if `_renderedIds.add(item.id)` returns `true` (i.e. the id
+wasn't already rendered) — fetch order is preserved (still appended in
+the order the page returned them, just skipping repeats), and
+`_syncedCount`/`_hasMore`'s pagination math is computed exactly as before,
+unaffected by the dedup (which only gates what reaches the render list, not
+the offset accounting). **Regression test:** `rekap_screen_test.dart` —
+*"rekap screen never renders the same transaction id twice when a pending
+item syncs mid-scroll..."* — scripts a page-0/page-1 fetch pair where page 1
+deliberately re-returns an id from page 0 (the exact shape of the shift
+described above), scrolls to trigger the second page load, and asserts the
+shared id renders exactly once while the genuinely new id also renders.
+Confirmed this test fails on the pre-fix code (finds the shared-id text
+twice) and passes on the fix.
 
 ### Finding 3 — LOW/MEDIUM: soft duplicate check never looks at pending local rows
 
@@ -340,14 +383,21 @@ higher-end device (Galaxy Z Flip5 per CLAUDE.md §9). Each item states what
 
 ## 4. Recommendation
 
-No code changes proposed for immediate action beyond what's described above.
-Suggested priority if the Tech Lead wants fixes queued:
+Findings 1 and 2 are fixed (see the status update at the top of this
+document) — both changes are minimal, local to their own file, don't touch
+`fetchHistoryWithPending` or any sync/outbox logic, and are each backed by a
+regression test confirmed to fail pre-fix and pass post-fix. `flutter
+analyze` is clean and the full suite (195 tests) is green.
 
-1. Finding 1 (sync-trigger/save-status coupling) — smallest, highest
-   confidence, most user-visible.
-2. Finding 2 (Rekap page-append dedup) — small, but worth confirming via
-   checklist item 4 first to see if it's reproducible before prioritizing.
-3. Findings 3–6 — track, no urgency; Finding 5 (migration test coverage)
-   should close before any v4 schema change ships to a populated device.
+Findings 3–6 remain tracked, not implemented, no urgency:
+
+- Finding 5 (migration test coverage) should close before any v4 schema
+  change ships to a populated device — the only one with a real deadline,
+  just not this one.
+- Findings 3, 4, 6 — track for awareness; revisit if real-device QA
+  (checklist items 10–11 for Finding 3, 13–15 for Finding 4) turns up
+  anything the reasoning above didn't anticipate.
+
+No further code changes proposed in this PR. Awaiting Tech Lead re-review.
 
 Awaiting direction on which (if any) to implement.
