@@ -67,6 +67,12 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.4
   drift_dev: ^2.34.5
   build_runner: ^2.16.0
+  # Direct raw-sqlite access for DRIFT-MIGRATION-001's migration tests
+  # (PRAGMA user_version checks proving a real onUpgrade ran, not a fresh
+  # onCreate) — was already present transitively via drift's own NativeDatabase
+  # implementation, declared explicitly here since test code now imports it
+  # directly. Test-only (dev_dependencies), not shipped in the app.
+  sqlite3: ^3.5.1
 
 # App icon config, consumed by `dart run flutter_launcher_icons` (dev-time
 # code-gen, not a runtime dep). "Glass Depth" concept per CLAUDE.md's "App
