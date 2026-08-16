@@ -1,0 +1,53 @@
+name: Flutter CI
+
+# Quality gate for the Flutter/Dart app — `flutter analyze` and `flutter
+# test` on every PR and push to `main`, plus a manual trigger for ad hoc
+# re-verification. This is deliberately separate from
+# supabase-migrate-prod.yml (which only ever touches the production
+# Supabase project on a push to `main` under the GENSITI-incident
+# guardrail) — this workflow never touches Supabase or any deployment
+# target, it only runs the app's local Dart-level checks.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  quality-gates:
+    name: Analyze & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Pinned to an exact version (not just `channel: stable`) for
+      # determinism — the repo has no fvm/asdf pin of its own (.metadata
+      # only records the channel, "stable", from whenever the project was
+      # created), and floating on whatever "stable" happens to resolve to
+      # on a given day would let CI's Flutter/Dart version drift silently
+      # over time with no corresponding repo change. 3.47.0 ships Dart
+      # 3.13.0, satisfying pubspec.yaml's `sdk: ^3.12.2` constraint, and is
+      # the version this whole project has been developed and verified
+      # against. Bump this alongside any future `sdk:` constraint change in
+      # pubspec.yaml.
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.0'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Separate steps (not chained with &&) so a failure is attributed to
+      # the specific gate that caught it, not a single opaque "build
+      # failed" — and neither gate is allowed to be skipped or weakened:
+      # both run unconditionally, with their real exit code, against the
+      # full analyzer/test suite.
+      - name: flutter analyze
+        run: flutter analyze
+
+      - name: flutter test
+        run: flutter test
