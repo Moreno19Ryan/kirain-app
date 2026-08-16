@@ -1,11 +1,11 @@
 import 'package:drift/drift.dart';
 
-/// Where a queued transaction stands in its delivery lifecycle. Mirrors the
-/// state machine from OFFLINE-001's ADR: PENDING -> SYNCING -> (delete on
-/// success) / back to PENDING on a retryable error / FAILED on a permanent
-/// one. Only the persistence primitives (this table + the DAO's status
-/// setters) are built here — the worker that actually drives these
-/// transitions is a later task.
+/// Where a queued transaction stands in its delivery lifecycle:
+/// PENDING -> (claimed) -> SYNCING -> delete on success / PENDING on a
+/// retryable error / FAILED on a permanent one. A SYNCING row whose
+/// [LocalOutboxItems.lockedAt] lease has gone stale is recovered back to
+/// PENDING (see SyncWorker.recoverStaleLeases in OFFLINE-002) rather than
+/// being stuck forever if the app dies mid-sync.
 enum OutboxSyncStatus { pending, syncing, failed }
 
 /// Local write-ahead outbox for offline transaction creation (OFFLINE-001).
@@ -77,6 +77,15 @@ class LocalOutboxItems extends Table {
   DateTimeColumn get lastAttemptAt => dateTime().nullable()();
 
   TextColumn get errorMessage => text().nullable()();
+
+  /// The sync lease: non-null only while [syncStatus] is SYNCING, set to the
+  /// claim time by SyncWorker's conditional claim UPDATE. Null again the
+  /// moment a row leaves SYNCING (success = row deleted; retryable/permanent
+  /// failure = explicitly cleared) — so "has a lease" and "is SYNCING" stay
+  /// equivalent, which is what makes staleness ("SYNCING for longer than the
+  /// configured threshold") a simple `lockedAt` age check rather than needing
+  /// a separately-tracked expiry.
+  DateTimeColumn get lockedAt => dateTime().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};

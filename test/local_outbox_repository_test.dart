@@ -20,10 +20,11 @@ void main() {
     String? goalId,
     int amount = 50000,
     DateTime? createdAt,
+    String userId = 'user-1',
   }) {
     return OutboxDraft(
       id: id,
-      userId: 'user-1',
+      userId: userId,
       categoryId: goalId == null ? categoryId : null,
       goalId: goalId,
       amount: amount,
@@ -251,6 +252,117 @@ void main() {
               ),
           throwsA(isA<SqliteException>()),
         );
+      });
+    });
+
+    group('claim/lease (OFFLINE-002)', () {
+      test('PENDING can be claimed for sync', () async {
+        await repo.insertPending(draft(id: 'x'));
+
+        final claimed = await repo.claimForSync('x', lockedAt: DateTime.utc(2026, 8, 15, 11));
+
+        expect(claimed, isTrue);
+        final item = await repo.findById('x');
+        expect(item!.syncStatus, OutboxSyncStatus.syncing);
+        expect(item.lockedAt?.toUtc(), DateTime.utc(2026, 8, 15, 11));
+      });
+
+      test('claim is conditional on the row still being PENDING', () async {
+        await repo.insertPending(draft(id: 'x'));
+        await repo.claimForSync('x', lockedAt: DateTime.utc(2026, 8, 15, 11));
+
+        // Now SYNCING — a claim attempt must not succeed against it.
+        final secondClaim = await repo.claimForSync('x', lockedAt: DateTime.utc(2026, 8, 15, 12));
+
+        expect(secondClaim, isFalse);
+      });
+
+      test('an already-claimed row cannot be claimed twice', () async {
+        await repo.insertPending(draft(id: 'x'));
+
+        final first = await repo.claimForSync('x', lockedAt: DateTime.utc(2026, 8, 15, 11));
+        final second = await repo.claimForSync('x', lockedAt: DateTime.utc(2026, 8, 15, 11, 0, 1));
+
+        expect(first, isTrue);
+        expect(second, isFalse);
+        // Only the first claim's lockedAt stuck.
+        final item = await repo.findById('x');
+        expect(item!.lockedAt?.toUtc(), DateTime.utc(2026, 8, 15, 11));
+      });
+
+      test('a stale SYNCING item is recovered to PENDING', () async {
+        await repo.insertPending(draft(id: 'x'));
+        await repo.claimForSync('x', lockedAt: DateTime.utc(2026, 8, 15, 10));
+
+        final recovered = await repo.recoverStaleLeases(before: DateTime.utc(2026, 8, 15, 10, 5));
+
+        expect(recovered, 1);
+        final item = await repo.findById('x');
+        expect(item!.syncStatus, OutboxSyncStatus.pending);
+        expect(item.lockedAt, isNull);
+      });
+
+      test('a non-stale SYNCING item is left untouched', () async {
+        await repo.insertPending(draft(id: 'x'));
+        await repo.claimForSync('x', lockedAt: DateTime.utc(2026, 8, 15, 10, 59));
+
+        final recovered = await repo.recoverStaleLeases(before: DateTime.utc(2026, 8, 15, 10, 5));
+
+        expect(recovered, 0);
+        final item = await repo.findById('x');
+        expect(item!.syncStatus, OutboxSyncStatus.syncing);
+        expect(item.lockedAt?.toUtc(), DateTime.utc(2026, 8, 15, 10, 59));
+      });
+
+      test('recovering stale leases does not touch unrelated PENDING items', () async {
+        await repo.insertPending(draft(id: 'stale-sync'));
+        await repo.claimForSync('stale-sync', lockedAt: DateTime.utc(2026, 8, 15, 10));
+        await repo.insertPending(draft(id: 'still-pending'));
+
+        await repo.recoverStaleLeases(before: DateTime.utc(2026, 8, 15, 10, 5));
+
+        final stillPending = await repo.findById('still-pending');
+        expect(stillPending!.syncStatus, OutboxSyncStatus.pending);
+        expect(stillPending.lockedAt, isNull);
+      });
+
+      test('retryFailed moves a FAILED item back to PENDING', () async {
+        await repo.insertPending(draft(id: 'x'));
+        await repo.markFailed('x', errorMessage: 'boom');
+
+        await repo.retryFailed('x');
+
+        final item = await repo.findById('x');
+        expect(item!.syncStatus, OutboxSyncStatus.pending);
+      });
+    });
+
+    group('eligibleBatch user scoping (Tech Lead review: OFFLINE-002)', () {
+      test('only returns items belonging to the requested user', () async {
+        await repo.insertPending(draft(id: 'a-item', userId: 'user-A'));
+        await repo.insertPending(draft(id: 'b-item', userId: 'user-B'));
+
+        final batch = await repo.eligibleBatch(limit: 10, userId: 'user-B');
+
+        expect(batch.map((e) => e.id).toList(), ['b-item']);
+      });
+
+      test('a user with no pending items gets an empty batch, not another user\'s', () async {
+        await repo.insertPending(draft(id: 'a-item', userId: 'user-A'));
+
+        final batch = await repo.eligibleBatch(limit: 10, userId: 'user-B');
+
+        expect(batch, isEmpty);
+      });
+
+      test('respects the limit within one user\'s scope, still oldest-first', () async {
+        await repo.insertPending(draft(id: 'a1', userId: 'user-A', createdAt: DateTime.utc(2026, 8, 15, 9)));
+        await repo.insertPending(draft(id: 'a2', userId: 'user-A', createdAt: DateTime.utc(2026, 8, 15, 10)));
+        await repo.insertPending(draft(id: 'b1', userId: 'user-B', createdAt: DateTime.utc(2026, 8, 15, 8)));
+
+        final batch = await repo.eligibleBatch(limit: 1, userId: 'user-A');
+
+        expect(batch.map((e) => e.id).toList(), ['a1']);
       });
     });
   });
