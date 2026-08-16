@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/utils/format.dart';
+import '../../../core/utils/ids.dart';
 import '../../transactions/data/transaction_repository.dart';
 import 'savings_goal.dart';
 
@@ -76,7 +77,12 @@ class SavingsGoalRepository {
   /// Records a "Tabungan" transaction (visible in Riwayat, excluded from
   /// the wajib/keinginan budget math) and bumps the goal's current_amount.
   Future<void> contribute({required String goalId, required num amount, String? note}) async {
-    await _transactionRepository.addSavingsContribution(goalId: goalId, amount: amount, note: note);
+    await _transactionRepository.addSavingsContribution(
+      id: newId(),
+      goalId: goalId,
+      amount: amount,
+      note: note,
+    );
     await _bumpAmount(goalId, amount);
   }
 

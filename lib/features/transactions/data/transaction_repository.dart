@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/utils/format.dart';
-import '../../../core/utils/ids.dart';
 import '../../categories/data/category.dart';
 
 final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
@@ -99,7 +98,15 @@ class TransactionRepository {
 
   final SupabaseClient _client;
 
+  /// [id] must be a UUID v4 generated once by the caller at transaction
+  /// creation time (see core/utils/ids.dart's `newId()`) — not generated in
+  /// here. Per ADR-001 (OFFLINE-001), the same id has to survive unchanged
+  /// across every retry an offline-queue send might need, and a repository
+  /// method that rolls its own id on every call can't guarantee that; only
+  /// the caller that owns the transaction's identity from the moment it's
+  /// created can.
   Future<void> addTransaction({
+    required String id,
     required String categoryId,
     required num amount,
     String? note,
@@ -109,10 +116,7 @@ class TransactionRepository {
     final userId = _client.auth.currentUser!.id;
 
     return _client.from('transactions').insert({
-      // Client-generated, not left to the column's `gen_random_uuid()`
-      // default — see core/utils/ids.dart for why (offline-retry
-      // idempotency).
-      'id': newId(),
+      'id': id,
       'user_id': userId,
       'category_id': categoryId,
       'goal_id': null,
@@ -126,7 +130,11 @@ class TransactionRepository {
   /// A "Tabungan" transaction — money moving toward a savings goal. Doesn't
   /// count toward wajib/keinginan (no category, no expense_type), but shows
   /// up in Riwayat Transaksi so the overall financial picture stays honest.
+  ///
+  /// See [addTransaction]'s doc for why [id] is caller-supplied rather than
+  /// generated in here.
   Future<void> addSavingsContribution({
+    required String id,
     required String goalId,
     required num amount,
     String? note,
@@ -134,7 +142,7 @@ class TransactionRepository {
     final userId = _client.auth.currentUser!.id;
 
     return _client.from('transactions').insert({
-      'id': newId(),
+      'id': id,
       'user_id': userId,
       'category_id': null,
       'goal_id': goalId,
