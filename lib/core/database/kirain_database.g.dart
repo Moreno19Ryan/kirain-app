@@ -145,6 +145,17 @@ class $LocalOutboxItemsTable extends LocalOutboxItems
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _lockedAtMeta = const VerificationMeta(
+    'lockedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lockedAt = GeneratedColumn<DateTime>(
+    'locked_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -160,6 +171,7 @@ class $LocalOutboxItemsTable extends LocalOutboxItems
     retryCount,
     lastAttemptAt,
     errorMessage,
+    lockedAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -264,6 +276,12 @@ class $LocalOutboxItemsTable extends LocalOutboxItems
         ),
       );
     }
+    if (data.containsKey('locked_at')) {
+      context.handle(
+        _lockedAtMeta,
+        lockedAt.isAcceptableOrUnknown(data['locked_at']!, _lockedAtMeta),
+      );
+    }
     return context;
   }
 
@@ -327,6 +345,10 @@ class $LocalOutboxItemsTable extends LocalOutboxItems
         DriftSqlType.string,
         data['${effectivePrefix}error_message'],
       ),
+      lockedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}locked_at'],
+      ),
     );
   }
 
@@ -381,6 +403,15 @@ class LocalOutboxItem extends DataClass implements Insertable<LocalOutboxItem> {
   final int retryCount;
   final DateTime? lastAttemptAt;
   final String? errorMessage;
+
+  /// The sync lease: non-null only while [syncStatus] is SYNCING, set to the
+  /// claim time by SyncWorker's conditional claim UPDATE. Null again the
+  /// moment a row leaves SYNCING (success = row deleted; retryable/permanent
+  /// failure = explicitly cleared) — so "has a lease" and "is SYNCING" stay
+  /// equivalent, which is what makes staleness ("SYNCING for longer than the
+  /// configured threshold") a simple `lockedAt` age check rather than needing
+  /// a separately-tracked expiry.
+  final DateTime? lockedAt;
   const LocalOutboxItem({
     required this.id,
     required this.userId,
@@ -395,6 +426,7 @@ class LocalOutboxItem extends DataClass implements Insertable<LocalOutboxItem> {
     required this.retryCount,
     this.lastAttemptAt,
     this.errorMessage,
+    this.lockedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -428,6 +460,9 @@ class LocalOutboxItem extends DataClass implements Insertable<LocalOutboxItem> {
     if (!nullToAbsent || errorMessage != null) {
       map['error_message'] = Variable<String>(errorMessage);
     }
+    if (!nullToAbsent || lockedAt != null) {
+      map['locked_at'] = Variable<DateTime>(lockedAt);
+    }
     return map;
   }
 
@@ -456,6 +491,9 @@ class LocalOutboxItem extends DataClass implements Insertable<LocalOutboxItem> {
       errorMessage: errorMessage == null && nullToAbsent
           ? const Value.absent()
           : Value(errorMessage),
+      lockedAt: lockedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lockedAt),
     );
   }
 
@@ -480,6 +518,7 @@ class LocalOutboxItem extends DataClass implements Insertable<LocalOutboxItem> {
       retryCount: serializer.fromJson<int>(json['retryCount']),
       lastAttemptAt: serializer.fromJson<DateTime?>(json['lastAttemptAt']),
       errorMessage: serializer.fromJson<String?>(json['errorMessage']),
+      lockedAt: serializer.fromJson<DateTime?>(json['lockedAt']),
     );
   }
   @override
@@ -501,6 +540,7 @@ class LocalOutboxItem extends DataClass implements Insertable<LocalOutboxItem> {
       'retryCount': serializer.toJson<int>(retryCount),
       'lastAttemptAt': serializer.toJson<DateTime?>(lastAttemptAt),
       'errorMessage': serializer.toJson<String?>(errorMessage),
+      'lockedAt': serializer.toJson<DateTime?>(lockedAt),
     };
   }
 
@@ -518,6 +558,7 @@ class LocalOutboxItem extends DataClass implements Insertable<LocalOutboxItem> {
     int? retryCount,
     Value<DateTime?> lastAttemptAt = const Value.absent(),
     Value<String?> errorMessage = const Value.absent(),
+    Value<DateTime?> lockedAt = const Value.absent(),
   }) => LocalOutboxItem(
     id: id ?? this.id,
     userId: userId ?? this.userId,
@@ -534,6 +575,7 @@ class LocalOutboxItem extends DataClass implements Insertable<LocalOutboxItem> {
         ? lastAttemptAt.value
         : this.lastAttemptAt,
     errorMessage: errorMessage.present ? errorMessage.value : this.errorMessage,
+    lockedAt: lockedAt.present ? lockedAt.value : this.lockedAt,
   );
   LocalOutboxItem copyWithCompanion(LocalOutboxItemsCompanion data) {
     return LocalOutboxItem(
@@ -564,6 +606,7 @@ class LocalOutboxItem extends DataClass implements Insertable<LocalOutboxItem> {
       errorMessage: data.errorMessage.present
           ? data.errorMessage.value
           : this.errorMessage,
+      lockedAt: data.lockedAt.present ? data.lockedAt.value : this.lockedAt,
     );
   }
 
@@ -582,7 +625,8 @@ class LocalOutboxItem extends DataClass implements Insertable<LocalOutboxItem> {
           ..write('syncStatus: $syncStatus, ')
           ..write('retryCount: $retryCount, ')
           ..write('lastAttemptAt: $lastAttemptAt, ')
-          ..write('errorMessage: $errorMessage')
+          ..write('errorMessage: $errorMessage, ')
+          ..write('lockedAt: $lockedAt')
           ..write(')'))
         .toString();
   }
@@ -602,6 +646,7 @@ class LocalOutboxItem extends DataClass implements Insertable<LocalOutboxItem> {
     retryCount,
     lastAttemptAt,
     errorMessage,
+    lockedAt,
   );
   @override
   bool operator ==(Object other) =>
@@ -619,7 +664,8 @@ class LocalOutboxItem extends DataClass implements Insertable<LocalOutboxItem> {
           other.syncStatus == this.syncStatus &&
           other.retryCount == this.retryCount &&
           other.lastAttemptAt == this.lastAttemptAt &&
-          other.errorMessage == this.errorMessage);
+          other.errorMessage == this.errorMessage &&
+          other.lockedAt == this.lockedAt);
 }
 
 class LocalOutboxItemsCompanion extends UpdateCompanion<LocalOutboxItem> {
@@ -636,6 +682,7 @@ class LocalOutboxItemsCompanion extends UpdateCompanion<LocalOutboxItem> {
   final Value<int> retryCount;
   final Value<DateTime?> lastAttemptAt;
   final Value<String?> errorMessage;
+  final Value<DateTime?> lockedAt;
   final Value<int> rowid;
   const LocalOutboxItemsCompanion({
     this.id = const Value.absent(),
@@ -651,6 +698,7 @@ class LocalOutboxItemsCompanion extends UpdateCompanion<LocalOutboxItem> {
     this.retryCount = const Value.absent(),
     this.lastAttemptAt = const Value.absent(),
     this.errorMessage = const Value.absent(),
+    this.lockedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   LocalOutboxItemsCompanion.insert({
@@ -667,6 +715,7 @@ class LocalOutboxItemsCompanion extends UpdateCompanion<LocalOutboxItem> {
     this.retryCount = const Value.absent(),
     this.lastAttemptAt = const Value.absent(),
     this.errorMessage = const Value.absent(),
+    this.lockedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        userId = Value(userId),
@@ -688,6 +737,7 @@ class LocalOutboxItemsCompanion extends UpdateCompanion<LocalOutboxItem> {
     Expression<int>? retryCount,
     Expression<DateTime>? lastAttemptAt,
     Expression<String>? errorMessage,
+    Expression<DateTime>? lockedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -704,6 +754,7 @@ class LocalOutboxItemsCompanion extends UpdateCompanion<LocalOutboxItem> {
       if (retryCount != null) 'retry_count': retryCount,
       if (lastAttemptAt != null) 'last_attempt_at': lastAttemptAt,
       if (errorMessage != null) 'error_message': errorMessage,
+      if (lockedAt != null) 'locked_at': lockedAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -722,6 +773,7 @@ class LocalOutboxItemsCompanion extends UpdateCompanion<LocalOutboxItem> {
     Value<int>? retryCount,
     Value<DateTime?>? lastAttemptAt,
     Value<String?>? errorMessage,
+    Value<DateTime?>? lockedAt,
     Value<int>? rowid,
   }) {
     return LocalOutboxItemsCompanion(
@@ -738,6 +790,7 @@ class LocalOutboxItemsCompanion extends UpdateCompanion<LocalOutboxItem> {
       retryCount: retryCount ?? this.retryCount,
       lastAttemptAt: lastAttemptAt ?? this.lastAttemptAt,
       errorMessage: errorMessage ?? this.errorMessage,
+      lockedAt: lockedAt ?? this.lockedAt,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -786,6 +839,9 @@ class LocalOutboxItemsCompanion extends UpdateCompanion<LocalOutboxItem> {
     if (errorMessage.present) {
       map['error_message'] = Variable<String>(errorMessage.value);
     }
+    if (lockedAt.present) {
+      map['locked_at'] = Variable<DateTime>(lockedAt.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -808,6 +864,7 @@ class LocalOutboxItemsCompanion extends UpdateCompanion<LocalOutboxItem> {
           ..write('retryCount: $retryCount, ')
           ..write('lastAttemptAt: $lastAttemptAt, ')
           ..write('errorMessage: $errorMessage, ')
+          ..write('lockedAt: $lockedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -842,6 +899,7 @@ typedef $$LocalOutboxItemsTableCreateCompanionBuilder =
       Value<int> retryCount,
       Value<DateTime?> lastAttemptAt,
       Value<String?> errorMessage,
+      Value<DateTime?> lockedAt,
       Value<int> rowid,
     });
 typedef $$LocalOutboxItemsTableUpdateCompanionBuilder =
@@ -859,6 +917,7 @@ typedef $$LocalOutboxItemsTableUpdateCompanionBuilder =
       Value<int> retryCount,
       Value<DateTime?> lastAttemptAt,
       Value<String?> errorMessage,
+      Value<DateTime?> lockedAt,
       Value<int> rowid,
     });
 
@@ -936,6 +995,11 @@ class $$LocalOutboxItemsTableFilterComposer
     column: $table.errorMessage,
     builder: (column) => ColumnFilters(column),
   );
+
+  ColumnFilters<DateTime> get lockedAt => $composableBuilder(
+    column: $table.lockedAt,
+    builder: (column) => ColumnFilters(column),
+  );
 }
 
 class $$LocalOutboxItemsTableOrderingComposer
@@ -1011,6 +1075,11 @@ class $$LocalOutboxItemsTableOrderingComposer
     column: $table.errorMessage,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<DateTime> get lockedAt => $composableBuilder(
+    column: $table.lockedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$LocalOutboxItemsTableAnnotationComposer
@@ -1075,6 +1144,9 @@ class $$LocalOutboxItemsTableAnnotationComposer
     column: $table.errorMessage,
     builder: (column) => column,
   );
+
+  GeneratedColumn<DateTime> get lockedAt =>
+      $composableBuilder(column: $table.lockedAt, builder: (column) => column);
 }
 
 class $$LocalOutboxItemsTableTableManager
@@ -1127,6 +1199,7 @@ class $$LocalOutboxItemsTableTableManager
                 Value<int> retryCount = const Value.absent(),
                 Value<DateTime?> lastAttemptAt = const Value.absent(),
                 Value<String?> errorMessage = const Value.absent(),
+                Value<DateTime?> lockedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => LocalOutboxItemsCompanion(
                 id: id,
@@ -1142,6 +1215,7 @@ class $$LocalOutboxItemsTableTableManager
                 retryCount: retryCount,
                 lastAttemptAt: lastAttemptAt,
                 errorMessage: errorMessage,
+                lockedAt: lockedAt,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -1159,6 +1233,7 @@ class $$LocalOutboxItemsTableTableManager
                 Value<int> retryCount = const Value.absent(),
                 Value<DateTime?> lastAttemptAt = const Value.absent(),
                 Value<String?> errorMessage = const Value.absent(),
+                Value<DateTime?> lockedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => LocalOutboxItemsCompanion.insert(
                 id: id,
@@ -1174,6 +1249,7 @@ class $$LocalOutboxItemsTableTableManager
                 retryCount: retryCount,
                 lastAttemptAt: lastAttemptAt,
                 errorMessage: errorMessage,
+                lockedAt: lockedAt,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

@@ -253,5 +253,87 @@ void main() {
         );
       });
     });
+
+    group('claim/lease (OFFLINE-002)', () {
+      test('PENDING can be claimed for sync', () async {
+        await repo.insertPending(draft(id: 'x'));
+
+        final claimed = await repo.claimForSync('x', lockedAt: DateTime.utc(2026, 8, 15, 11));
+
+        expect(claimed, isTrue);
+        final item = await repo.findById('x');
+        expect(item!.syncStatus, OutboxSyncStatus.syncing);
+        expect(item.lockedAt?.toUtc(), DateTime.utc(2026, 8, 15, 11));
+      });
+
+      test('claim is conditional on the row still being PENDING', () async {
+        await repo.insertPending(draft(id: 'x'));
+        await repo.claimForSync('x', lockedAt: DateTime.utc(2026, 8, 15, 11));
+
+        // Now SYNCING — a claim attempt must not succeed against it.
+        final secondClaim = await repo.claimForSync('x', lockedAt: DateTime.utc(2026, 8, 15, 12));
+
+        expect(secondClaim, isFalse);
+      });
+
+      test('an already-claimed row cannot be claimed twice', () async {
+        await repo.insertPending(draft(id: 'x'));
+
+        final first = await repo.claimForSync('x', lockedAt: DateTime.utc(2026, 8, 15, 11));
+        final second = await repo.claimForSync('x', lockedAt: DateTime.utc(2026, 8, 15, 11, 0, 1));
+
+        expect(first, isTrue);
+        expect(second, isFalse);
+        // Only the first claim's lockedAt stuck.
+        final item = await repo.findById('x');
+        expect(item!.lockedAt?.toUtc(), DateTime.utc(2026, 8, 15, 11));
+      });
+
+      test('a stale SYNCING item is recovered to PENDING', () async {
+        await repo.insertPending(draft(id: 'x'));
+        await repo.claimForSync('x', lockedAt: DateTime.utc(2026, 8, 15, 10));
+
+        final recovered = await repo.recoverStaleLeases(before: DateTime.utc(2026, 8, 15, 10, 5));
+
+        expect(recovered, 1);
+        final item = await repo.findById('x');
+        expect(item!.syncStatus, OutboxSyncStatus.pending);
+        expect(item.lockedAt, isNull);
+      });
+
+      test('a non-stale SYNCING item is left untouched', () async {
+        await repo.insertPending(draft(id: 'x'));
+        await repo.claimForSync('x', lockedAt: DateTime.utc(2026, 8, 15, 10, 59));
+
+        final recovered = await repo.recoverStaleLeases(before: DateTime.utc(2026, 8, 15, 10, 5));
+
+        expect(recovered, 0);
+        final item = await repo.findById('x');
+        expect(item!.syncStatus, OutboxSyncStatus.syncing);
+        expect(item.lockedAt?.toUtc(), DateTime.utc(2026, 8, 15, 10, 59));
+      });
+
+      test('recovering stale leases does not touch unrelated PENDING items', () async {
+        await repo.insertPending(draft(id: 'stale-sync'));
+        await repo.claimForSync('stale-sync', lockedAt: DateTime.utc(2026, 8, 15, 10));
+        await repo.insertPending(draft(id: 'still-pending'));
+
+        await repo.recoverStaleLeases(before: DateTime.utc(2026, 8, 15, 10, 5));
+
+        final stillPending = await repo.findById('still-pending');
+        expect(stillPending!.syncStatus, OutboxSyncStatus.pending);
+        expect(stillPending.lockedAt, isNull);
+      });
+
+      test('retryFailed moves a FAILED item back to PENDING', () async {
+        await repo.insertPending(draft(id: 'x'));
+        await repo.markFailed('x', errorMessage: 'boom');
+
+        await repo.retryFailed('x');
+
+        final item = await repo.findById('x');
+        expect(item!.syncStatus, OutboxSyncStatus.pending);
+      });
+    });
   });
 }
