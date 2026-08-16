@@ -1,4 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Debug/profile builds get this for free from
+         android/app/src/{debug,profile}/AndroidManifest.xml (Flutter's own
+         template, added there for the VM service/hot reload) — which is
+         exactly why its absence here went unnoticed. Release builds only
+         merge this main manifest, so without it declared here a release
+         APK has zero network access: no Supabase auth, no sync, nothing.
+         KIRAIN talks to Supabase from first launch, so this isn't optional. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <application
         android:label="kirain"
