@@ -1,3 +1,5 @@
+import 'package:drift/drift.dart' show driftRuntimeOptions;
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -5,6 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:kirain/core/database/kirain_database.dart';
+import 'package:kirain/core/database/local_outbox_repository.dart';
+import 'package:kirain/core/sync/local_first_transaction_service.dart';
+import 'package:kirain/core/sync/sync_worker.dart';
+import 'package:kirain/core/sync/transaction_sync_service.dart';
 import 'package:kirain/features/app_lock/data/app_lock_repository.dart';
 import 'package:kirain/features/app_lock/presentation/lock_screen.dart';
 import 'package:kirain/features/auth/presentation/otp_verify_screen.dart';
@@ -35,6 +42,12 @@ void _growTestSurface(WidgetTester tester) {
 }
 
 void main() {
+  // The double-tap guard test below spins up several throwaway in-memory
+  // KirainDatabases (see its _NoOpDuplicateCheckRepository/syncWorkerProvider
+  // overrides) purely to satisfy constructors — never shared, so Drift's
+  // "created multiple times" warning here is a false positive, not a race.
+  driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+
   testWidgets('sign-in screen shows an email field and submit button', (tester) async {
     await tester.pumpWidget(
       const ProviderScope(child: MaterialApp(home: SignInScreen())),
@@ -328,6 +341,70 @@ void main() {
 
       expect(fakeRepo.categories.last.icon, 'pets');
       expect(fakeRepo.categories.last.color, '#A9B7C4');
+    },
+  );
+
+  testWidgets(
+    'catat form ignores a rapid second tap on Oke, Catat — only one transaction is recorded (OFFLINE-003)',
+    (tester) async {
+      const wajibCategory = Category(
+        id: 'w1',
+        name: 'Makan & Minum',
+        kind: CategoryKind.expense,
+        expenseType: ExpenseType.wajib,
+      );
+
+      final db = KirainDatabase(NativeDatabase.memory());
+      addTearDown(db.close);
+      final outbox = LocalOutboxRepository(db);
+
+      _growTestSurface(tester);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            categoriesProvider.overrideWith((ref) async => const [wajibCategory]),
+            transactionRepositoryProvider.overrideWithValue(_NoOpDuplicateCheckRepository()),
+            localFirstTransactionServiceProvider.overrideWithValue(
+              LocalFirstTransactionService(outbox, currentUserId: () => 'user-1'),
+            ),
+            // Submitting also fires `triggerSyncAfterOutboxInsertion`, which
+            // reads this provider — its default construction hits
+            // `Supabase.instance.client` synchronously (see
+            // transaction_sync_service.dart), which throws in a widget test
+            // where Supabase was never initialized. Pointed at a separate,
+            // permanently-empty outbox (not [outbox]) rather than a working
+            // one: a real SyncWorker racing an in-process claim/sync/retry
+            // cycle against the row this test is about to assert on would
+            // make the assertion's timing depend on that unrelated worker,
+            // not on the double-tap guard this test actually verifies.
+            syncWorkerProvider.overrideWithValue(
+              SyncWorker(
+                LocalOutboxRepository(KirainDatabase(NativeDatabase.memory())),
+                _NoOpTransactionSyncService(),
+                currentUserId: () => 'user-1',
+              ),
+            ),
+          ],
+          child: const MaterialApp(home: CatatScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.widgetWithText(TextFormField, 'Jumlah (Rp)'), '20000');
+      await tester.tap(find.text('Makan & Minum'));
+      await tester.pumpAndSettle();
+
+      // Two taps back-to-back with no pump in between — reproduces the race
+      // the synchronous `_isSubmitting` guard exists for (see CatatScreen's
+      // doc comment on that field). Without the guard this would land two
+      // separate transactions (two distinct client-generated UUIDs).
+      await tester.tap(find.text('Oke, Catat'));
+      await tester.tap(find.text('Oke, Catat'));
+      await tester.pumpAndSettle();
+
+      final recorded = await outbox.pendingItems();
+      expect(recorded, hasLength(1));
+      expect(find.textContaining('Tercatat!'), findsOneWidget);
     },
   );
 
@@ -806,5 +883,41 @@ class _FakeCategoryRepository extends CategoryRepository {
     );
     categories.add(created);
     return created;
+  }
+}
+
+/// Used only by the double-tap guard test — its one job is to keep
+/// `_doSubmit`'s soft duplicate check off the network entirely, so that test
+/// stays about the guard, not about Supabase reachability.
+class _NoOpDuplicateCheckRepository extends TransactionRepository {
+  _NoOpDuplicateCheckRepository()
+    : super(
+        SupabaseClient(
+          'https://example.supabase.co',
+          'test-anon-key',
+          authOptions: const AuthClientOptions(autoRefreshToken: false),
+        ),
+        LocalOutboxRepository(KirainDatabase(NativeDatabase.memory())),
+        currentUserId: () => null,
+      );
+
+  @override
+  Future<bool> hasPossibleDuplicate({
+    required String categoryId,
+    required num amount,
+    required DateTime date,
+  }) async => false;
+}
+
+/// Also used only by the double-tap guard test, pairing with
+/// [_NoOpDuplicateCheckRepository]'s reasoning: `triggerSyncAfterOutboxInsertion`
+/// fires a real `processQueue()` call after every local-first submit, and
+/// this keeps that off Supabase entirely. Always fails (simulating offline)
+/// rather than succeeding, so the recorded row stays PENDING instead of
+/// being synced-and-deleted out from under the test's own assertion.
+class _NoOpTransactionSyncService implements TransactionSyncService {
+  @override
+  Future<void> upsertTransaction(LocalOutboxItem item) async {
+    throw Exception('offline (test double)');
   }
 }

@@ -1,11 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/database/kirain_database.dart';
+import '../../../core/database/local_outbox_repository.dart';
+import '../../../core/database/local_outbox_table.dart';
 import '../../../core/utils/format.dart';
 import '../../categories/data/category.dart';
 
 final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
-  return TransactionRepository(Supabase.instance.client);
+  return TransactionRepository(Supabase.instance.client, ref.watch(localOutboxRepositoryProvider));
 });
 
 /// Whether this account has ever recorded a single transaction — used to
@@ -48,6 +51,7 @@ class TransactionHistoryItem {
     required this.transactionDate,
     this.note,
     this.expenseType,
+    this.pendingStatus,
   });
 
   final String id;
@@ -59,6 +63,14 @@ class TransactionHistoryItem {
   final DateTime transactionDate;
   final String? note;
   final ExpenseType? expenseType;
+
+  /// Null for a transaction fetched from Supabase (confirmed synced) — the
+  /// steady state for the vast majority of history. Non-null for OFFLINE-003's
+  /// local-first overlay: this transaction only exists on-device so far, and
+  /// the value is its live `LocalOutboxItems.sync_status` at fetch time
+  /// (pending/syncing/failed), used to drive the "belum tersinkron"/"Gagal
+  /// disinkron" badge. See `TransactionRepository.fetchHistoryWithPending`.
+  final OutboxSyncStatus? pendingStatus;
 
   bool get isSavingsContribution => goalId != null;
 
@@ -91,12 +103,43 @@ class TransactionHistoryItem {
       },
     );
   }
+
+  /// Builds the optimistic-overlay item from a [LocalTransaction] row plus
+  /// its live delivery status. No [categoryName]/[goalName] — a local row
+  /// only ever stores the id (see LocalTransactions' own doc comment); the
+  /// UI resolves the display name from the categories list it already
+  /// watches, same as it does for every other row (see RekapScreen's
+  /// `categoryById` lookup).
+  factory TransactionHistoryItem.fromLocal(LocalTransaction row, {required OutboxSyncStatus status}) {
+    return TransactionHistoryItem(
+      id: row.id,
+      amount: row.amount,
+      categoryId: row.categoryId,
+      goalId: row.goalId,
+      transactionDate: DateTime.parse(row.transactionDate),
+      note: row.note,
+      expenseType: switch (row.expenseType) {
+        'wajib' => ExpenseType.wajib,
+        'keinginan' => ExpenseType.keinginan,
+        _ => null,
+      },
+      pendingStatus: status,
+    );
+  }
 }
 
 class TransactionRepository {
-  TransactionRepository(this._client);
+  /// [currentUserId] is injectable (defaults to reading the live Supabase
+  /// session) for the same reason `SyncWorker`/`LocalFirstTransactionService`
+  /// do it: `SupabaseClient.auth.currentUser` can't be faked in a test
+  /// without a real session, so [fetchHistoryWithPending]'s local-merge
+  /// branch needs a seam here to exercise it without one.
+  TransactionRepository(this._client, this._localOutbox, {String? Function()? currentUserId})
+    : _currentUserId = currentUserId ?? (() => Supabase.instance.client.auth.currentUser?.id);
 
   final SupabaseClient _client;
+  final LocalOutboxRepository _localOutbox;
+  final String? Function() _currentUserId;
 
   /// [id] must be a UUID v4 generated once by the caller at transaction
   /// creation time (see core/utils/ids.dart's `newId()`) — not generated in
@@ -203,6 +246,85 @@ class TransactionRepository {
     ).order('transaction_date', ascending: false).order('created_at', ascending: false).range(offset, offset + limit - 1);
 
     return rows.map(TransactionHistoryItem.fromJson).toList();
+  }
+
+  /// OFFLINE-003: [fetchHistory] plus an optimistic overlay of not-yet-synced
+  /// local transactions, merged in. Per the approved design (PR #44 §4.1):
+  ///
+  /// - The overlay is only injected at `offset == 0` — pending items are
+  ///   always freshly-created, so they conceptually belong at/near the top
+  ///   of page one; injecting them on later pages would either duplicate
+  ///   them or disturb the offset math for everything after. Any other
+  ///   offset just delegates straight to [fetchHistory].
+  /// - No signed-in user (shouldn't normally happen mid-session, but keeps
+  ///   this safe to call defensively) also just delegates to [fetchHistory].
+  /// - Merge is ID-keyed and deterministic: Supabase's page wins on overlap
+  ///   (a local row whose sync already landed and shows up in the same
+  ///   Supabase page is *not* double-shown), pending rows fill in the rest.
+  ///   A local row whose [OutboxSyncStatus] can no longer be found (already
+  ///   synced and cleaned up between the two reads, i.e. a race with
+  ///   SyncWorker/deleteSynced) is silently dropped rather than shown as if
+  ///   it were still pending.
+  /// - Sort is deterministic — transaction date desc, pending rows before
+  ///   synced ones on the same date, then id — rather than a full re-sort
+  ///   by creation time. [TransactionHistoryItem] has no `createdAt` (the
+  ///   Supabase-fetched side of the merge never selects it), and `List.sort`
+  ///   isn't guaranteed stable, so this is an intentional, documented
+  ///   simplification rather than a perfectly historical ordering.
+  /// - Pending items are added on top of the page, not counted against
+  ///   [limit]: they haven't earned a "slot" in Supabase's true ordering
+  ///   yet, and there are only ever a handful in flight at once.
+  Future<List<TransactionHistoryItem>> fetchHistoryWithPending({
+    required int limit,
+    required int offset,
+    String? categoryId,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? searchText,
+  }) async {
+    final synced = await fetchHistory(
+      limit: limit,
+      offset: offset,
+      categoryId: categoryId,
+      startDate: startDate,
+      endDate: endDate,
+      searchText: searchText,
+    );
+
+    if (offset != 0) return synced;
+
+    final userId = _currentUserId();
+    if (userId == null) return synced;
+
+    final localRows = await _localOutbox.localTransactionsInRange(userId: userId, start: startDate, end: endDate);
+    final filteredLocalRows = localRows.where((row) {
+      if (categoryId != null && row.categoryId != categoryId) return false;
+      if (searchText != null && searchText.isNotEmpty) {
+        final note = row.note;
+        if (note == null || !note.toLowerCase().contains(searchText.toLowerCase())) return false;
+      }
+      return true;
+    });
+
+    final statuses = await _localOutbox.syncStatusesForIds(filteredLocalRows.map((row) => row.id).toList());
+
+    final merged = <String, TransactionHistoryItem>{for (final item in synced) item.id: item};
+    for (final row in filteredLocalRows) {
+      final status = statuses[row.id];
+      if (status == null) continue;
+      merged.putIfAbsent(row.id, () => TransactionHistoryItem.fromLocal(row, status: status));
+    }
+
+    final result = merged.values.toList()
+      ..sort((a, b) {
+        final dateCmp = b.transactionDate.compareTo(a.transactionDate);
+        if (dateCmp != 0) return dateCmp;
+        final aPending = a.pendingStatus != null;
+        final bPending = b.pendingStatus != null;
+        if (aPending != bPending) return aPending ? -1 : 1;
+        return a.id.compareTo(b.id);
+      });
+    return result;
   }
 
   /// Unpaginated, same filters as [fetchHistory] — for CSV export, not the

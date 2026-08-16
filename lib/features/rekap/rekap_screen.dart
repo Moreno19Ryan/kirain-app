@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/database/local_outbox_table.dart';
+import '../../core/sync/sync_worker.dart';
 import '../../core/theme/kirain_colors.dart';
 import '../../core/utils/format.dart';
 import '../categories/data/category.dart';
@@ -24,6 +26,15 @@ class _RekapScreenState extends ConsumerState<RekapScreen> {
   final _searchController = TextEditingController();
 
   final List<TransactionHistoryItem> _items = [];
+
+  /// How many *confirmed-synced* items have been loaded so far — the
+  /// Supabase page offset for the next [_loadMore] call. Deliberately not
+  /// `_items.length`: OFFLINE-003's pending overlay (injected only on the
+  /// `reset: true` / first page) adds extra rows on top of the page without
+  /// consuming a page slot (see `fetchHistoryWithPending`'s doc comment), so
+  /// counting them into the offset would skip that many real Supabase rows
+  /// on the next page.
+  int _syncedCount = 0;
   Category? _categoryFilter;
   DateTimeRange? _dateFilter;
   String _search = '';
@@ -60,6 +71,7 @@ class _RekapScreenState extends ConsumerState<RekapScreen> {
       _isLoading = true;
       if (reset) {
         _items.clear();
+        _syncedCount = 0;
         _hasMore = true;
       }
     });
@@ -67,19 +79,23 @@ class _RekapScreenState extends ConsumerState<RekapScreen> {
     try {
       final page = await ref
           .read(transactionRepositoryProvider)
-          .fetchHistory(
+          .fetchHistoryWithPending(
             limit: _pageSize,
-            offset: _items.length,
+            offset: _syncedCount,
             categoryId: _categoryFilter?.id,
             startDate: _dateFilter?.start,
             endDate: _dateFilter?.end.add(const Duration(days: 1)),
             searchText: _search,
           );
+      // Pending rows never came from a Supabase page, so they don't count
+      // toward the offset/hasMore math below — see [_syncedCount]'s doc.
+      final syncedPageLength = page.where((item) => item.pendingStatus == null).length;
 
       if (!mounted) return;
       setState(() {
         _items.addAll(page);
-        _hasMore = page.length == _pageSize;
+        _syncedCount += syncedPageLength;
+        _hasMore = syncedPageLength == _pageSize;
       });
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -380,7 +396,7 @@ class _DateGroupHeader extends StatelessWidget {
   }
 }
 
-class _TransactionCard extends StatelessWidget {
+class _TransactionCard extends ConsumerWidget {
   const _TransactionCard({required this.item, required this.category});
 
   final TransactionHistoryItem item;
@@ -391,7 +407,7 @@ class _TransactionCard extends StatelessWidget {
   final Category? category;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final kirainColors = theme.extension<KirainColors>();
     final mintStrong = kirainColors?.mintStrong ?? theme.colorScheme.onPrimaryContainer;
@@ -453,6 +469,15 @@ class _TransactionCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         _NabungBadge(color: neutral),
                       ],
+                      if (item.pendingStatus != null) ...[
+                        const SizedBox(width: 6),
+                        _SyncStatusBadge(
+                          status: item.pendingStatus!,
+                          onRetry: item.pendingStatus == OutboxSyncStatus.failed
+                              ? () => ref.read(syncWorkerProvider).retryFailedItem(item.id)
+                              : null,
+                        ),
+                      ],
                     ],
                   ),
                   if (item.note != null && item.note!.isNotEmpty)
@@ -493,6 +518,45 @@ class _NabungBadge extends StatelessWidget {
         'NABUNG',
         style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color, fontWeight: FontWeight.w700),
       ),
+    );
+  }
+}
+
+/// OFFLINE-003's optimistic-overlay indicator — shown only on
+/// [TransactionHistoryItem]s with a non-null `pendingStatus`, i.e. rows that
+/// only exist on-device so far (see that field's doc comment). PENDING and
+/// SYNCING both read as "belum tersinkron" (the user doesn't need to
+/// distinguish "queued" from "sending right now"); FAILED gets its own
+/// label plus a tap target that retries — the "ketuk buat coba lagi"
+/// CLAUDE.md calls for.
+class _SyncStatusBadge extends StatelessWidget {
+  const _SyncStatusBadge({required this.status, this.onRetry});
+
+  final OutboxSyncStatus status;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isFailed = status == OutboxSyncStatus.failed;
+    final color = isFailed
+        ? (theme.extension<KirainColors>()?.coralStrong ?? theme.colorScheme.error)
+        : theme.colorScheme.onSurfaceVariant;
+    final label = isFailed ? 'Gagal disinkron' : 'Belum tersinkron';
+
+    final badge = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(6)),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(color: color, fontWeight: FontWeight.w700),
+      ),
+    );
+
+    if (onRetry == null) return badge;
+    return Tooltip(
+      message: 'Ketuk buat coba lagi',
+      child: InkWell(onTap: onRetry, borderRadius: BorderRadius.circular(6), child: badge),
     );
   }
 }

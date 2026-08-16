@@ -1,8 +1,10 @@
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../utils/format.dart';
 import 'kirain_database.dart';
 import 'local_outbox_table.dart';
+import 'local_transactions_table.dart';
 
 final localOutboxRepositoryProvider = Provider<LocalOutboxRepository>((ref) {
   return LocalOutboxRepository(ref.watch(kirainDatabaseProvider));
@@ -70,10 +72,12 @@ class OutboxDraft {
   final String? expenseType;
 }
 
-/// DAO for [LocalOutboxItems]. Persistence primitives from OFFLINE-001, plus
-/// OFFLINE-002's claim/lease methods that SyncWorker builds its state
-/// machine on top of. Nothing in here decides *when* to sync or how to
-/// classify a failure — that's SyncWorker's job; this just gives it a
+/// DAO for [LocalOutboxItems] and, since OFFLINE-003, the paired
+/// [LocalTransactions] display table. Persistence primitives from
+/// OFFLINE-001, OFFLINE-002's claim/lease methods that SyncWorker builds its
+/// state machine on top of, and OFFLINE-003's local-first write/read
+/// methods. Nothing in here decides *when* to sync or how to classify a
+/// failure — that's SyncWorker's job; this just gives it (and the UI) a
 /// durable, race-safe place to read from and write to.
 class LocalOutboxRepository {
   LocalOutboxRepository(this._db);
@@ -81,22 +85,48 @@ class LocalOutboxRepository {
   final KirainDatabase _db;
 
   Future<void> insertPending(OutboxDraft draft) {
-    return _db
-        .into(_db.localOutboxItems)
-        .insert(
-          LocalOutboxItemsCompanion.insert(
-            id: draft.id,
-            userId: draft.userId,
-            categoryId: Value(draft.categoryId),
-            goalId: Value(draft.goalId),
-            amount: draft.amount,
-            note: Value(draft.note),
-            transactionDate: draft.transactionDate,
-            createdAt: draft.createdAt,
-            expenseType: Value(draft.expenseType),
-            syncStatus: OutboxSyncStatus.pending,
-          ),
-        );
+    return _db.into(_db.localOutboxItems).insert(_outboxCompanion(draft));
+  }
+
+  /// OFFLINE-003's local-first write: inserts matching [LocalTransactions]
+  /// (display) and [LocalOutboxItems] (delivery, PENDING) rows sharing
+  /// [draft.id], in one atomic Drift transaction. If the process dies
+  /// between the two inserts, SQLite rolls the whole thing back on next
+  /// open — there is never a state where one row exists without the other.
+  Future<void> insertLocalFirstTransaction(OutboxDraft draft) {
+    return _db.transaction(() async {
+      await _db.into(_db.localTransactions).insert(_localTransactionCompanion(draft));
+      await insertPending(draft);
+    });
+  }
+
+  LocalOutboxItemsCompanion _outboxCompanion(OutboxDraft draft) {
+    return LocalOutboxItemsCompanion.insert(
+      id: draft.id,
+      userId: draft.userId,
+      categoryId: Value(draft.categoryId),
+      goalId: Value(draft.goalId),
+      amount: draft.amount,
+      note: Value(draft.note),
+      transactionDate: draft.transactionDate,
+      createdAt: draft.createdAt,
+      expenseType: Value(draft.expenseType),
+      syncStatus: OutboxSyncStatus.pending,
+    );
+  }
+
+  LocalTransactionsCompanion _localTransactionCompanion(OutboxDraft draft) {
+    return LocalTransactionsCompanion.insert(
+      id: draft.id,
+      userId: draft.userId,
+      categoryId: Value(draft.categoryId),
+      goalId: Value(draft.goalId),
+      amount: draft.amount,
+      note: Value(draft.note),
+      transactionDate: draft.transactionDate,
+      createdAt: draft.createdAt,
+      expenseType: Value(draft.expenseType),
+    );
   }
 
   /// Deterministic, oldest-first — so a future sync worker sends queued
@@ -219,8 +249,54 @@ class LocalOutboxRepository {
 
   /// Called once an outbox item's insert has been confirmed on Supabase (or
   /// found to already exist there under the same UUID) — its job is done,
-  /// nothing left to retry.
+  /// nothing left to retry. Since OFFLINE-003, also deletes the matching
+  /// [LocalTransactions] row (if any) in the same atomic transaction: once
+  /// Supabase has it, the local echo's only purpose — filling the gap before
+  /// that confirmation existed — is done too. A row inserted by
+  /// [insertPending] alone (no matching [LocalTransactions] row, e.g. the
+  /// OFFLINE-001/002 direct-write paths that don't go through
+  /// [insertLocalFirstTransaction]) simply has nothing to delete here — a
+  /// harmless no-op, not an error.
   Future<void> deleteSynced(String id) {
-    return (_db.delete(_db.localOutboxItems)..where((t) => t.id.equals(id))).go();
+    return _db.transaction(() async {
+      await (_db.delete(_db.localOutboxItems)..where((t) => t.id.equals(id))).go();
+      await (_db.delete(_db.localTransactions)..where((t) => t.id.equals(id))).go();
+    });
+  }
+
+  /// The OFFLINE-003 optimistic-feed read: local rows not yet confirmed
+  /// synced, scoped to [userId] — never another user's, mirroring
+  /// [eligibleBatch]'s query-level ownership filter applied to this read
+  /// path (see the OFFLINE-003 design's user-ownership requirement). [start]/
+  /// [end] bound [LocalTransactions.transactionDate] the same way
+  /// [end]-exclusive as TransactionRepository's Supabase queries; omit either
+  /// for an unbounded side.
+  Future<List<LocalTransaction>> localTransactionsInRange({
+    required String userId,
+    DateTime? start,
+    DateTime? end,
+  }) {
+    final query = _db.select(_db.localTransactions)..where((t) => t.userId.equals(userId));
+    if (start != null) {
+      final startIso = isoDate(start);
+      query.where((t) => t.transactionDate.isBiggerOrEqualValue(startIso));
+    }
+    if (end != null) {
+      final endIso = isoDate(end);
+      query.where((t) => t.transactionDate.isSmallerThanValue(endIso));
+    }
+    return query.get();
+  }
+
+  /// Live delivery-status lookup for a set of ids, keyed by id — this is
+  /// what lets the UI show "belum tersinkron"/"Gagal disinkron" without
+  /// [LocalTransactions] itself ever storing a denormalized status (see that
+  /// table's doc comment for why). Ids with no matching [LocalOutboxItems]
+  /// row (already synced, or never existed) are simply absent from the
+  /// result map.
+  Future<Map<String, OutboxSyncStatus>> syncStatusesForIds(List<String> ids) async {
+    if (ids.isEmpty) return {};
+    final rows = await (_db.select(_db.localOutboxItems)..where((t) => t.id.isIn(ids))).get();
+    return {for (final row in rows) row.id: row.syncStatus};
   }
 }
