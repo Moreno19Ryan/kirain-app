@@ -70,17 +70,17 @@ class _SyncLifecycleGateState extends ConsumerState<SyncLifecycleGate> with Widg
 }
 
 /// The local-insertion trigger: call this right after writing a new item to
-/// the outbox (`LocalOutboxRepository.insertPending`) so a sync attempt
+/// the outbox (`LocalOutboxRepository.insertPending`, or OFFLINE-003's
+/// `LocalFirstTransactionService.recordTransaction`) so a sync attempt
 /// starts immediately instead of waiting for the next startup/resume/
 /// connectivity event. Fire-and-forget by design — saving locally must not
 /// block on network sync.
 ///
-/// Not called from anywhere yet: OFFLINE-001/002 built the outbox and the
-/// worker that drains it, but TransactionRepository's write path hasn't
-/// been switched over to write through the outbox first (see this PR's
-/// "known limitations" — that's a product-facing change, not just wiring,
-/// and is being held for explicit sign-off). This exists so that switch is
-/// a one-line addition at each call site once it happens.
-void triggerSyncAfterOutboxInsertion(Ref ref) {
+/// Takes [WidgetRef] rather than [Ref]: every real call site is a widget's
+/// submit handler (Catat's `_doSubmit`, as of OFFLINE-003), and `WidgetRef`
+/// doesn't extend `Ref` in this Riverpod version, so typing this any more
+/// broadly than what's actually used would just make the one real caller
+/// need an extra cast.
+void triggerSyncAfterOutboxInsertion(WidgetRef ref) {
   unawaited(ref.read(syncWorkerProvider).processQueue());
 }

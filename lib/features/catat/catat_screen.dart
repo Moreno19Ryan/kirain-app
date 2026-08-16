@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/sync/local_first_transaction_service.dart';
+import '../../core/sync/sync_lifecycle_gate.dart';
 import '../../core/theme/kirain_colors.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/ids.dart';
@@ -39,6 +41,17 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
   String? _errorMessage;
   _SavedSummary? _lastSaved;
 
+  /// OFFLINE-003's double-tap guard. Deliberately *not* the same thing as
+  /// [_isSaving]: that one only takes effect once `setState` has actually
+  /// rebuilt the button as disabled, which happens on the next frame — a
+  /// second tap landing in the gap between the first tap and that rebuild
+  /// (e.g. during the checkout-warning/duplicate dialogs' `await`s, which
+  /// run *before* [_isSaving] is ever set) would still slip through and
+  /// re-enter [_submit]. This field is checked and set synchronously, as
+  /// the very first thing [_submit] does, so a second call sees it already
+  /// `true` immediately — no frame, no `await`, no race window.
+  bool _isSubmitting = false;
+
   @override
   void initState() {
     super.initState();
@@ -73,6 +86,18 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
   }
 
   Future<void> _submit() async {
+    // Synchronous guard — see [_isSubmitting]'s doc comment for why this has
+    // to be the very first line, before even `_formKey.currentState!.validate()`.
+    if (_isSubmitting) return;
+    _isSubmitting = true;
+    try {
+      await _doSubmit();
+    } finally {
+      _isSubmitting = false;
+    }
+  }
+
+  Future<void> _doSubmit() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (_mode == _CatatMode.nabung) {
@@ -85,7 +110,10 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
       return;
     }
 
-    final amount = num.parse(_amountController.text.trim());
+    // Whole Rupiah only — the amount field's keyboard is decimal-disabled,
+    // and `LocalFirstTransactionService.recordTransaction` requires an int
+    // (see its doc comment for why the local-first path is int, not num).
+    final amount = num.parse(_amountController.text.trim()).round();
     final category = _selectedCategory!;
     final effectiveType = category.kind == CategoryKind.expense ? _expenseType : null;
 
@@ -103,9 +131,18 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
     });
 
     try {
-      final isDuplicate = await ref
-          .read(transactionRepositoryProvider)
-          .hasPossibleDuplicate(categoryId: category.id, amount: amount, date: DateTime.now());
+      // Soft, non-blocking check per CLAUDE.md — a failure here (e.g.
+      // offline, no Supabase reachable) must never stop the save itself,
+      // so it's treated the same as "not a duplicate" rather than
+      // surfaced as an error.
+      var isDuplicate = false;
+      try {
+        isDuplicate = await ref
+            .read(transactionRepositoryProvider)
+            .hasPossibleDuplicate(categoryId: category.id, amount: amount, date: DateTime.now());
+      } catch (_) {
+        isDuplicate = false;
+      }
 
       if (isDuplicate) {
         if (!mounted) return;
@@ -113,16 +150,24 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
         if (proceed != true) return;
       }
 
+      final note = _noteController.text.trim().isEmpty ? null : _noteController.text.trim();
+
+      // Local-first (OFFLINE-003): lands in the local DB instantly, works
+      // offline, and syncs to Supabase in the background — see
+      // LocalFirstTransactionService's doc comment. Goals/Recurring stay on
+      // the direct-to-Supabase `TransactionRepository.addTransaction` path;
+      // this is Catat-only, per the approved design's scope.
       await ref
-          .read(transactionRepositoryProvider)
-          .addTransaction(
+          .read(localFirstTransactionServiceProvider)
+          .recordTransaction(
             id: newId(),
             categoryId: category.id,
             amount: amount,
-            note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
-            expenseType: effectiveType,
+            note: note,
+            expenseType: effectiveType?.name,
             transactionDate: _transactionDate,
           );
+      triggerSyncAfterOutboxInsertion(ref);
 
       setState(() {
         _lastSaved = _SavedSummary(category: category.name, amount: amount);

@@ -21,6 +21,7 @@ void main() {
     int amount = 50000,
     DateTime? createdAt,
     String userId = 'user-1',
+    String transactionDate = '2026-08-15',
   }) {
     return OutboxDraft(
       id: id,
@@ -29,7 +30,7 @@ void main() {
       goalId: goalId,
       amount: amount,
       note: 'test note',
-      transactionDate: '2026-08-15',
+      transactionDate: transactionDate,
       createdAt: createdAt ?? DateTime.utc(2026, 8, 15, 10, 30),
       expenseType: 'wajib',
     );
@@ -334,6 +335,138 @@ void main() {
 
         final item = await repo.findById('x');
         expect(item!.syncStatus, OutboxSyncStatus.pending);
+      });
+    });
+
+    group('local-first display table (OFFLINE-003)', () {
+      test('insertLocalFirstTransaction writes matching LocalTransactions and LocalOutboxItems rows', () async {
+        await repo.insertLocalFirstTransaction(draft(id: 'lf-1', amount: 75000));
+
+        final outboxItem = await repo.findById('lf-1');
+        expect(outboxItem, isNotNull);
+        expect(outboxItem!.syncStatus, OutboxSyncStatus.pending);
+
+        final localRows = await repo.localTransactionsInRange(userId: 'user-1');
+        expect(localRows, hasLength(1));
+        expect(localRows.single.id, 'lf-1');
+        expect(localRows.single.amount, 75000);
+        expect(localRows.single.categoryId, 'cat-1');
+      });
+
+      test('insertLocalFirstTransaction is atomic — a failure on the second insert rolls back the first', () async {
+        // Pre-seed a raw LocalOutboxItems row under the id insertLocalFirstTransaction
+        // is about to try — its own insertPending step will then hit a
+        // primary-key conflict, proving the whole transaction (including
+        // the LocalTransactions insert that ran first) rolls back together
+        // rather than leaving an orphaned LocalTransactions row behind.
+        await db
+            .into(db.localOutboxItems)
+            .insert(
+              LocalOutboxItemsCompanion.insert(
+                id: 'lf-conflict',
+                userId: 'user-1',
+                categoryId: const Value('cat-1'),
+                amount: 1,
+                transactionDate: '2026-08-15',
+                createdAt: DateTime.utc(2026, 8, 15),
+                syncStatus: OutboxSyncStatus.pending,
+              ),
+            );
+
+        await expectLater(
+          () => repo.insertLocalFirstTransaction(draft(id: 'lf-conflict')),
+          throwsA(isA<SqliteException>()),
+        );
+
+        final localRows = await repo.localTransactionsInRange(userId: 'user-1');
+        expect(localRows, isEmpty);
+      });
+
+      test('deleteSynced removes both the LocalTransactions and LocalOutboxItems rows', () async {
+        await repo.insertLocalFirstTransaction(draft(id: 'lf-2'));
+
+        await repo.deleteSynced('lf-2');
+
+        expect(await repo.findById('lf-2'), isNull);
+        expect(await repo.localTransactionsInRange(userId: 'user-1'), isEmpty);
+      });
+
+      test('deleteSynced on an outbox-only row (no paired LocalTransactions row) is a harmless no-op', () async {
+        // The OFFLINE-001/002 direct-write paths only ever call insertPending,
+        // never insertLocalFirstTransaction — deleteSynced must keep working
+        // for those rows without erroring on the missing LocalTransactions half.
+        await repo.insertPending(draft(id: 'legacy-1'));
+
+        await expectLater(() => repo.deleteSynced('legacy-1'), returnsNormally);
+        expect(await repo.findById('legacy-1'), isNull);
+      });
+
+      test('FAILED does not delete the LocalTransactions row — only deleteSynced does', () async {
+        await repo.insertLocalFirstTransaction(draft(id: 'lf-3'));
+
+        await repo.markFailed('lf-3', errorMessage: 'permanent error');
+
+        final localRows = await repo.localTransactionsInRange(userId: 'user-1');
+        expect(localRows, hasLength(1));
+        expect(localRows.single.id, 'lf-3');
+        final statuses = await repo.syncStatusesForIds(['lf-3']);
+        expect(statuses['lf-3'], OutboxSyncStatus.failed);
+      });
+
+      test('a local-first transaction survives reopening the local database', () async {
+        final dir = await Directory.systemTemp.createTemp('kirain_local_first_test');
+        addTearDown(() => dir.delete(recursive: true));
+        final file = File('${dir.path}/test.sqlite');
+        const id = 'restart-id';
+
+        final firstOpen = KirainDatabase(NativeDatabase(file));
+        await LocalOutboxRepository(firstOpen).insertLocalFirstTransaction(draft(id: id, amount: 42000));
+        await firstOpen.close();
+
+        final secondOpen = KirainDatabase(NativeDatabase(file));
+        final reopenedRepo = LocalOutboxRepository(secondOpen);
+        final localRows = await reopenedRepo.localTransactionsInRange(userId: 'user-1');
+        final statuses = await reopenedRepo.syncStatusesForIds([id]);
+        await secondOpen.close();
+
+        expect(localRows.map((r) => r.id), [id]);
+        expect(localRows.single.amount, 42000);
+        expect(statuses[id], OutboxSyncStatus.pending);
+      });
+
+      test('localTransactionsInRange is scoped to the requested user only', () async {
+        await repo.insertLocalFirstTransaction(draft(id: 'a-item', userId: 'user-A'));
+        await repo.insertLocalFirstTransaction(draft(id: 'b-item', userId: 'user-B'));
+
+        final userARows = await repo.localTransactionsInRange(userId: 'user-A');
+
+        expect(userARows.map((r) => r.id).toList(), ['a-item']);
+      });
+
+      test('localTransactionsInRange respects the start/end date bounds ([end] exclusive)', () async {
+        await repo.insertLocalFirstTransaction(draft(id: 'before-range', transactionDate: '2026-07-31'));
+        await repo.insertLocalFirstTransaction(draft(id: 'in-range', transactionDate: '2026-08-15'));
+        await repo.insertLocalFirstTransaction(draft(id: 'on-end-boundary', transactionDate: '2026-09-01'));
+
+        final rows = await repo.localTransactionsInRange(
+          userId: 'user-1',
+          start: DateTime.utc(2026, 8, 1),
+          end: DateTime.utc(2026, 9, 1),
+        );
+
+        expect(rows.map((r) => r.id).toList(), ['in-range']);
+      });
+
+      test('syncStatusesForIds returns an empty map for an empty id list', () async {
+        expect(await repo.syncStatusesForIds([]), isEmpty);
+      });
+
+      test('syncStatusesForIds omits ids with no matching outbox row (already synced)', () async {
+        await repo.insertLocalFirstTransaction(draft(id: 'still-pending'));
+
+        final statuses = await repo.syncStatusesForIds(['still-pending', 'never-existed']);
+
+        expect(statuses.keys, ['still-pending']);
       });
     });
 
