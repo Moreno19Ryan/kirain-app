@@ -167,7 +167,21 @@ class _CatatScreenState extends ConsumerState<CatatScreen> {
             expenseType: effectiveType?.name,
             transactionDate: _transactionDate,
           );
-      triggerSyncAfterOutboxInsertion(ref);
+
+      // The write above already succeeded — the transaction is durably
+      // queued locally regardless of what happens next. The sync trigger is
+      // fire-and-forget by design (see its own doc comment): isolate its
+      // error handling in its own try/catch so a failure in *it* (e.g.
+      // provider construction) can never fall through to the outer catch
+      // and get misreported as "gagal kesimpen" for a save that actually
+      // succeeded (OFFLINE-INTEGRATION-001 Finding 1). A missed kick here
+      // just means the next startup/resume/connectivity trigger picks the
+      // item up instead.
+      try {
+        triggerSyncAfterOutboxInsertion(ref);
+      } catch (_) {
+        // Nothing to do — see comment above.
+      }
 
       setState(() {
         _lastSaved = _SavedSummary(category: category.name, amount: amount);

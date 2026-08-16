@@ -35,6 +35,14 @@ class _RekapScreenState extends ConsumerState<RekapScreen> {
   /// counting them into the offset would skip that many real Supabase rows
   /// on the next page.
   int _syncedCount = 0;
+
+  /// Ids currently rendered in [_items] — a pending item finishing sync
+  /// mid-scroll shifts Supabase's true offset ordering by one, which can
+  /// make a later page re-fetch a row already rendered on an earlier page
+  /// (see OFFLINE-INTEGRATION-001 Finding 2). Guards [_loadMore] against
+  /// ever rendering the same transaction id twice, independent of
+  /// [_syncedCount]/[_hasMore]'s own (unchanged) pagination math.
+  final Set<String> _renderedIds = {};
   Category? _categoryFilter;
   DateTimeRange? _dateFilter;
   String _search = '';
@@ -71,6 +79,7 @@ class _RekapScreenState extends ConsumerState<RekapScreen> {
       _isLoading = true;
       if (reset) {
         _items.clear();
+        _renderedIds.clear();
         _syncedCount = 0;
         _hasMore = true;
       }
@@ -93,7 +102,11 @@ class _RekapScreenState extends ConsumerState<RekapScreen> {
 
       if (!mounted) return;
       setState(() {
-        _items.addAll(page);
+        // ID-keyed dedup, ordering preserved (still appended in fetch
+        // order — just skipping ids already rendered). See [_renderedIds].
+        for (final item in page) {
+          if (_renderedIds.add(item.id)) _items.add(item);
+        }
         _syncedCount += syncedPageLength;
         _hasMore = syncedPageLength == _pageSize;
       });
