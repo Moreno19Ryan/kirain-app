@@ -18,7 +18,7 @@
 | Automated (`flutter analyze` + `flutter test`) | **PASS** | 2/2 checks, 204/204 tests |
 | Build-artifact (§L) | **PARTIAL** | 1 PASS (source-level), 1 PARTIAL, 1 BLOCKED |
 | Emulator baseline setup | **BLOCKED** | environment has no Android SDK / no virtualization |
-| Device/emulator-tagged matrix items (§§A–K) | **BLOCKED** | 28 items, all BLOCKED on environment grounds |
+| Device/emulator-tagged matrix items (§§A–K) | **BLOCKED** | 29 items, all BLOCKED on environment grounds |
 | OPPO A3s physical-device items (§H, §J, §K24/K28/K29) | **BLOCKED** | no physical device reachable from this environment |
 | **FAIL** anywhere in this pass | **None** | nothing that was actually executable failed |
 
@@ -130,7 +130,7 @@ Status legend: **PASS** (executed, passed) / **FAIL** (executed, failed) /
 | L32 | `minSdkVersion` sanity check | build-artifact | **PASS** | See §2 |
 
 **Tally: 2/2 automated checks PASS (§1, 204/204 tests), 1 build-artifact
-PASS + 1 PARTIAL + 1 BLOCKED (§2), 28 device/emulator-tagged items BLOCKED
+PASS + 1 PARTIAL + 1 BLOCKED (§2), 29 device/emulator-tagged items BLOCKED
 (§§A–K).** Zero FAIL anywhere — nothing that *was* actually executable in
 this environment failed.
 
@@ -153,7 +153,7 @@ this environment failed.
    any newly discovered defect.** No FAIL was produced anywhere in this
    pass. This report should not be read as "QA passed" for sections A–L —
    only §1 (automated) and part of §2 (build-artifact, source-level only)
-   were actually exercised. The remaining ~28 items are exactly where they
+   were actually exercised. The remaining 29 items are exactly where they
    were before this session: specified, tagged, and waiting on real
    hardware or an environment with Android SDK + virtualization access.
 3. **No regressions.** `flutter analyze` and `flutter test` both re-confirm
