@@ -2,11 +2,27 @@
 
 > Executed against `docs/sprint-003-real-device-qa-plan.md` as the test
 > contract, on `main` at commit `3f2a392` (branch `claude/sprint-003-qa-plan`,
-> PR #50). Run `2026-08-16` in this session's remote execution container.
-> **No application code was changed, and no bug found during this pass was
-> fixed directly** — anything found is recorded as a finding for Tech Lead
-> triage, per instruction. This report is the separate execution artifact;
-> the plan document itself is unchanged.
+> PR #50), plus final verification against `c02a2c0` after this report was
+> first drafted. Run `2026-08-16`/`2026-08-17` in this session's remote
+> execution container. **No application code was changed, and no bug found
+> during this pass was fixed directly** — anything found is recorded as a
+> finding for Tech Lead triage, per instruction. This report is the
+> separate execution artifact; `docs/sprint-003-real-device-qa-plan.md`
+> itself was **not edited** — the one correction this pass surfaced (§5.1)
+> is recorded here as a finding, not applied silently to the agreed plan.
+
+## Summary
+
+| Category | Status | Count |
+|---|---|---|
+| Automated (`flutter analyze` + `flutter test`) | **PASS** | 2/2 checks, 204/204 tests |
+| Build-artifact (§L) | **PARTIAL** | 1 PASS (source-level), 1 PARTIAL, 1 BLOCKED |
+| Emulator baseline setup | **BLOCKED** | environment has no Android SDK / no virtualization |
+| Device/emulator-tagged matrix items (§§A–K) | **BLOCKED** | 28 items, all BLOCKED on environment grounds |
+| OPPO A3s physical-device items (§H, §J, §K24/K28/K29) | **BLOCKED** | no physical device reachable from this environment |
+| **FAIL** anywhere in this pass | **None** | nothing that was actually executable failed |
+
+Full detail and evidence for every line above is in §§0–4 below.
 
 ## 0. Environment reality check (read this first)
 
@@ -34,28 +50,39 @@ neither is actually reachable from this container.
 
 ## 1. Automated checks — executed, with evidence
 
-Run fresh in this session (not just cited from CI), same commands the
-`flutter-ci.yml` workflow runs:
+Run twice this session — once during initial execution, once as final
+verification after tidying this report — same commands the
+`flutter-ci.yml` workflow runs, both times on a clean `flutter pub get`:
 
 ```
-$ flutter analyze
+$ flutter analyze                                  (2026-08-16, initial)
 Analyzing kirain-app...
 No issues found! (ran in 1.7s)
 
-$ flutter test
+$ flutter test                                     (2026-08-16, initial)
 ...
 00:15 +204: All tests passed!
+
+$ flutter analyze                                  (2026-08-17, final verification)
+Analyzing kirain-app...
+No issues found! (ran in 11.2s)
+
+$ flutter test                                      (2026-08-17, final verification)
+...
+00:14 +204: All tests passed!
 ```
 
-- **`flutter analyze`: PASS — 0 issues.**
-- **`flutter test`: PASS — 204/204 passing** (193 pre-existing + 9
-  DRIFT-MIGRATION-001 + 2 OFFLINE-INTEGRATION-001 regression tests, per the
-  running total established across prior sprints).
+- **`flutter analyze`: PASS — 0 issues, both runs.**
+- **`flutter test`: PASS — 204/204 passing, both runs** (193 pre-existing +
+  9 DRIFT-MIGRATION-001 + 2 OFFLINE-INTEGRATION-001 regression tests, per
+  the running total established across prior sprints).
 
-This is the entirety of what "automated" coverage in the plan's §2
-environment table actually reaches — pure Dart/widget-test-layer logic.
+Identical results both times — no drift, no flake, no regression between
+the initial pass and final verification. This is the entirety of what
+"automated" coverage in the plan's §2 environment table actually reaches —
+pure Dart/widget-test-layer logic.
 
-## 2. Build-artifact checks — mixed: 1 PASS (source-level), 2 BLOCKED
+## 2. Build-artifact checks — 1 PASS (source-level), 1 PARTIAL, 1 BLOCKED
 
 The plan's §L items assume a real `flutter build apk --release` is
 possible. It isn't here (§0). Two of the three were still partially
@@ -98,11 +125,14 @@ Status legend: **PASS** (executed, passed) / **FAIL** (executed, failed) /
 | K26–K27 | App shortcut, home-screen widget | emulator, physical-device | **BLOCKED** | — |
 | K28 | Real WiFi↔cellular handoff | physical-device only | **BLOCKED** | — |
 | K29 | Real low-storage pressure | physical-device only | **BLOCKED** | — |
-| L30–L32 | Build & release artifact checks | build-artifact | **PARTIAL** (1 PASS, 1 partial-PASS, 1 BLOCKED) | See §2 |
+| L30 | APK size via `--analyze-size` | build-artifact | **BLOCKED** | See §2 |
+| L31 | Merged release manifest permissions | build-artifact | **PARTIAL** | See §2 |
+| L32 | `minSdkVersion` sanity check | build-artifact | **PASS** | See §2 |
 
-**Tally: 2 automated PASS (§1), 1 build-artifact PASS + 1 partial + 1
-BLOCKED (§2), 28 device/emulator-tagged items BLOCKED.** Zero FAIL — nothing
-that *was* actually executable in this environment failed.
+**Tally: 2/2 automated checks PASS (§1, 204/204 tests), 1 build-artifact
+PASS + 1 PARTIAL + 1 BLOCKED (§2), 28 device/emulator-tagged items BLOCKED
+(§§A–K).** Zero FAIL anywhere — nothing that *was* actually executable in
+this environment failed.
 
 ## 5. Findings from this pass
 
