@@ -14,11 +14,19 @@ import 'package:kirain/features/transactions/data/transaction_repository.dart';
 /// un-overridden and calls `fetchHistory` polymorphically — can be exercised
 /// against real merge logic without any network access. [currentUserId] is
 /// the same injectable seam `LocalFirstTransactionService`/`SyncWorker` use.
+///
+/// Also overrides [hasSupabaseDuplicate] (a canned bool, defaulting to
+/// `false`) for the same reason — Finding 3's `hasPossibleDuplicate` tests
+/// need to control the Supabase side of the check without real network
+/// access, while exercising the real local-side query
+/// ([hasLocalDuplicate], left un-overridden) against a real in-memory
+/// Drift database.
 class _FakeTransactionRepository extends TransactionRepository {
   _FakeTransactionRepository(
     this._syncedPages,
     LocalOutboxRepository localOutbox, {
     super.currentUserId,
+    this.supabaseHasDuplicate = false,
   }) : super(
          SupabaseClient(
            'https://example.supabase.co',
@@ -34,6 +42,8 @@ class _FakeTransactionRepository extends TransactionRepository {
   /// larger result set.
   final Map<int, List<TransactionHistoryItem>> _syncedPages;
 
+  final bool supabaseHasDuplicate;
+
   @override
   Future<List<TransactionHistoryItem>> fetchHistory({
     required int limit,
@@ -44,6 +54,11 @@ class _FakeTransactionRepository extends TransactionRepository {
     String? searchText,
   }) async {
     return _syncedPages[offset] ?? const [];
+  }
+
+  @override
+  Future<bool> hasSupabaseDuplicate({required String categoryId, required num amount, required DateTime date}) {
+    return Future.value(supabaseHasDuplicate);
   }
 }
 
@@ -241,6 +256,171 @@ void main() {
       final result = await repo.fetchHistoryWithPending(limit: 20, offset: 0);
 
       expect(result.single.pendingStatus, OutboxSyncStatus.failed);
+    });
+  });
+
+  group('TransactionRepository.hasPossibleDuplicate (OFFLINE-INTEGRATION-001 Finding 3)', () {
+    late KirainDatabase db;
+    late LocalOutboxRepository outbox;
+
+    setUp(() {
+      db = KirainDatabase(NativeDatabase.memory());
+      outbox = LocalOutboxRepository(db);
+    });
+
+    tearDown(() => db.close());
+
+    Future<void> insertLocal({
+      required String id,
+      required String userId,
+      String categoryId = 'cat-1',
+      int amount = 20000,
+      String transactionDate = '2026-08-15',
+      OutboxSyncStatus status = OutboxSyncStatus.pending,
+    }) async {
+      final draft = OutboxDraft(
+        id: id,
+        userId: userId,
+        categoryId: categoryId,
+        amount: amount,
+        transactionDate: transactionDate,
+        createdAt: DateTime.utc(2026, 8, 15),
+        expenseType: 'keinginan',
+      );
+      await outbox.insertLocalFirstTransaction(draft);
+      if (status == OutboxSyncStatus.failed) {
+        await outbox.markFailed(id, errorMessage: 'boom');
+      } else if (status == OutboxSyncStatus.syncing) {
+        await outbox.markSyncing(id);
+      }
+    }
+
+    test('a duplicate that exists only in Supabase (nothing local) is detected', () async {
+      final repo = _FakeTransactionRepository({}, outbox, currentUserId: () => 'user-1', supabaseHasDuplicate: true);
+
+      final result = await repo.hasPossibleDuplicate(
+        categoryId: 'cat-1',
+        amount: 20000,
+        date: DateTime(2026, 8, 15),
+      );
+
+      expect(result, isTrue);
+    });
+
+    test('a duplicate that only exists as a PENDING local row (not yet synced) is detected', () async {
+      await insertLocal(id: 'local-1', userId: 'user-1');
+      final repo = _FakeTransactionRepository({}, outbox, currentUserId: () => 'user-1');
+
+      final result = await repo.hasPossibleDuplicate(
+        categoryId: 'cat-1',
+        amount: 20000,
+        date: DateTime(2026, 8, 15),
+      );
+
+      expect(result, isTrue);
+    });
+
+    test('a duplicate that only exists as a SYNCING local row is detected', () async {
+      await insertLocal(id: 'local-1', userId: 'user-1', status: OutboxSyncStatus.syncing);
+      final repo = _FakeTransactionRepository({}, outbox, currentUserId: () => 'user-1');
+
+      final result = await repo.hasPossibleDuplicate(
+        categoryId: 'cat-1',
+        amount: 20000,
+        date: DateTime(2026, 8, 15),
+      );
+
+      expect(result, isTrue);
+    });
+
+    test('a duplicate that only exists as a FAILED local row is still detected', () async {
+      // Per OFFLINE-003's "Correction C": markFailed never deletes the
+      // LocalTransactions echo, so this row is still there to match against
+      // — exactly the case this fix exists to catch (a user whose first
+      // entry failed to send gets no warning on a genuine repeat).
+      await insertLocal(id: 'local-1', userId: 'user-1', status: OutboxSyncStatus.failed);
+      final repo = _FakeTransactionRepository({}, outbox, currentUserId: () => 'user-1');
+
+      final result = await repo.hasPossibleDuplicate(
+        categoryId: 'cat-1',
+        amount: 20000,
+        date: DateTime(2026, 8, 15),
+      );
+
+      expect(result, isTrue);
+    });
+
+    test('a transaction that has already synced (local echo cleaned up) is still detected via Supabase', () async {
+      await insertLocal(id: 'local-1', userId: 'user-1');
+      await outbox.deleteSynced('local-1'); // simulates SyncWorker's post-success cleanup
+      final repo = _FakeTransactionRepository({}, outbox, currentUserId: () => 'user-1', supabaseHasDuplicate: true);
+
+      final result = await repo.hasPossibleDuplicate(
+        categoryId: 'cat-1',
+        amount: 20000,
+        date: DateTime(2026, 8, 15),
+      );
+
+      expect(result, isTrue);
+      // And the local side alone (Supabase stubbed false) correctly no
+      // longer matches — the cleaned-up row isn't a phantom local duplicate.
+      final localOnlyRepo = _FakeTransactionRepository({}, outbox, currentUserId: () => 'user-1');
+      expect(
+        await localOnlyRepo.hasPossibleDuplicate(categoryId: 'cat-1', amount: 20000, date: DateTime(2026, 8, 15)),
+        isFalse,
+      );
+    });
+
+    test('a different category does not false-positive', () async {
+      await insertLocal(id: 'local-1', userId: 'user-1', categoryId: 'cat-1');
+      final repo = _FakeTransactionRepository({}, outbox, currentUserId: () => 'user-1');
+
+      final result = await repo.hasPossibleDuplicate(
+        categoryId: 'cat-2',
+        amount: 20000,
+        date: DateTime(2026, 8, 15),
+      );
+
+      expect(result, isFalse);
+    });
+
+    test('a different amount does not false-positive', () async {
+      await insertLocal(id: 'local-1', userId: 'user-1', amount: 20000);
+      final repo = _FakeTransactionRepository({}, outbox, currentUserId: () => 'user-1');
+
+      final result = await repo.hasPossibleDuplicate(
+        categoryId: 'cat-1',
+        amount: 25000,
+        date: DateTime(2026, 8, 15),
+      );
+
+      expect(result, isFalse);
+    });
+
+    test('a different date does not false-positive', () async {
+      await insertLocal(id: 'local-1', userId: 'user-1', transactionDate: '2026-08-15');
+      final repo = _FakeTransactionRepository({}, outbox, currentUserId: () => 'user-1');
+
+      final result = await repo.hasPossibleDuplicate(
+        categoryId: 'cat-1',
+        amount: 20000,
+        date: DateTime(2026, 8, 16),
+      );
+
+      expect(result, isFalse);
+    });
+
+    test('another user\'s matching local transaction is never treated as a duplicate', () async {
+      await insertLocal(id: 'not-mine', userId: 'user-B');
+      final repo = _FakeTransactionRepository({}, outbox, currentUserId: () => 'user-A');
+
+      final result = await repo.hasPossibleDuplicate(
+        categoryId: 'cat-1',
+        amount: 20000,
+        date: DateTime(2026, 8, 15),
+      );
+
+      expect(result, isFalse);
     });
   });
 }
