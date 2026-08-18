@@ -203,7 +203,28 @@ class TransactionRepository {
   /// Soft duplicate check: same category, same amount, same day. Used to
   /// warn (not block) before saving a new transaction — per CLAUDE.md,
   /// duplicate detection should never stop the user from saving.
+  ///
+  /// OFFLINE-INTEGRATION-001 Finding 3: checks both Supabase (confirmed
+  /// history) and the local-first echo (not-yet-confirmed transactions) —
+  /// see [hasLocalDuplicate] for exactly which local rows count and why.
+  /// Supabase is checked first since it's the common case (both entries
+  /// already synced) and short-circuits before touching local storage.
   Future<bool> hasPossibleDuplicate({
+    required String categoryId,
+    required num amount,
+    required DateTime date,
+  }) async {
+    if (await hasSupabaseDuplicate(categoryId: categoryId, amount: amount, date: date)) {
+      return true;
+    }
+    return hasLocalDuplicate(categoryId: categoryId, amount: amount, date: date);
+  }
+
+  /// The Supabase half of [hasPossibleDuplicate] — split into its own
+  /// method (rather than inlined) so tests can stub the network side out,
+  /// the same seam pattern [fetchHistory] already provides for
+  /// [fetchHistoryWithPending]'s tests.
+  Future<bool> hasSupabaseDuplicate({
     required String categoryId,
     required num amount,
     required DateTime date,
@@ -216,6 +237,58 @@ class TransactionRepository {
         .eq('transaction_date', isoDate(date))
         .limit(1);
     return rows.isNotEmpty;
+  }
+
+  /// The local half of [hasPossibleDuplicate] — OFFLINE-003's local-first
+  /// echo, [LocalTransactions]. No signed-in user just means no local rows
+  /// to check (mirrors [fetchHistoryWithPending]'s same defensive
+  /// fallback) rather than throwing.
+  ///
+  /// **Which local states count as a duplicate, and why:** a
+  /// [LocalTransactions] row only exists between the moment a transaction
+  /// is recorded locally and the moment [LocalOutboxRepository.deleteSynced]
+  /// removes it — which happens exactly once Supabase has confirmed the
+  /// write, atomically alongside its paired [LocalOutboxItems] row. That
+  /// means a matching [LocalTransactions] row's mere *existence* is already
+  /// sufficient proof "this hasn't been confirmed synced yet" — regardless
+  /// of whether its outbox delivery status is currently pending, syncing,
+  /// or failed:
+  /// - **pending** / **syncing** — obviously not yet confirmed.
+  /// - **failed** — also still counts: per OFFLINE-003's "Correction C"
+  ///   (only [LocalOutboxRepository.deleteSynced] ever removes a
+  ///   [LocalTransactions] row; [LocalOutboxRepository.markFailed] only
+  ///   touches [LocalOutboxItems]), a FAILED item's local echo is still
+  ///   sitting right here. Excluding it would mean a user whose first
+  ///   entry failed to send gets zero warning on a genuine back-to-back
+  ///   repeat — exactly the nudge this fix exists to restore.
+  ///
+  /// This is why the check queries [LocalTransactions] directly rather than
+  /// also cross-referencing [LocalOutboxItems.syncStatus] the way
+  /// [fetchHistoryWithPending] does: that extra lookup exists there only to
+  /// pick *which* badge to render, and reading it separately opens a race
+  /// window (a [LocalTransactions] row can outlive its already-deleted
+  /// [LocalOutboxItems] pair by a query or two) that [fetchHistoryWithPending]
+  /// has to defensively drop rows for. A plain existence check doesn't have
+  /// that problem: whatever's true on-disk at the moment this query runs is
+  /// exactly the fact this check needs.
+  Future<bool> hasLocalDuplicate({
+    required String categoryId,
+    required num amount,
+    required DateTime date,
+  }) async {
+    final userId = _currentUserId();
+    if (userId == null) return false;
+
+    final dayStart = DateTime(date.year, date.month, date.day);
+    final dayEnd = dayStart.add(const Duration(days: 1));
+
+    // [LocalOutboxRepository.localTransactionsInRange] already scopes to
+    // [userId] at the SQL level — the same ownership-isolation discipline
+    // every other local read path in this codebase uses (see
+    // [fetchHistoryWithPending]) — so a match can never belong to a
+    // different user.
+    final localRows = await _localOutbox.localTransactionsInRange(userId: userId, start: dayStart, end: dayEnd);
+    return localRows.any((row) => row.categoryId == categoryId && row.amount == amount);
   }
 
   /// [end] is exclusive.
